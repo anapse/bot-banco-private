@@ -182,11 +182,14 @@ function operDetectarCambios(op, iv) {
   bot._prevOper = bot._prevOper || { tasa: null, estado: null, regla: null, disponible: null, fuente: null };
   const p = bot._prevOper;
   const ahora = {
-    tasa: (op && (op.disponible ? op.tasa : op.tasaPublicada)) ?? null,
+    // Solo la tasa de INTERVENCIÓN entra en el seguimiento de la tasa operativa.
+    // (El menudeo se registra aparte, como referencia informativa, y no es la tasa
+    //  de la operación: la APK no lo usa en el flujo de intervención.)
+    tasa: (op && op.disponible ? op.tasa : null) ?? null,
     estado: (iv && iv.estado) ?? null,
     regla: (op && op.regla) ?? (iv && iv.regla) ?? null,
     disponible: !!(op && op.disponible),
-    fuente: (op && (op.disponible ? 'intervencion' : op.fuenteTasaPublicada)) ?? null,
+    fuente: (op && op.disponible) ? 'intervencion' : null,
   };
   if (p.tasa !== ahora.tasa && ahora.tasa != null) {
     operCambio('tasa', p.tasa, ahora.tasa, { fuente: ahora.fuente });
@@ -410,7 +413,19 @@ function logTasas(extra = '') {
 //    (tasaCambioCompraDolar, tasaCambioVentaDolar, tasaCambioCompraEuro, tasaCambioVentaEuro):
 //    mezclar ambos mercados fue el defecto que la refactorización anterior corrigió,
 //    y no se reintroduce.
-const CLAVES_TASA_INTERVENCION = ['tasaReferencia', 'tasaCambio', 'tasa', 'tasaMaxima', 'tasaVenta'];
+// Claves de tasa de la respuesta de intervención, ORDENADAS por la evidencia de la APK:
+//   · 'tasaVenta' / 'tasaCompra' son campos REALES del modelo `reglas_divisas` de la APK
+//     (esquema SQL literal en libapp.so + toString) — es el modelo que llena la consulta
+//     de reglas de la intervención.
+//   · 'tasaCambio' aparece en la APK como campo de otros modelos de operación.
+//   · 'tasaReferencia' NO es campo de ningún modelo en la APK (aparece 1 vez, suelto).
+//     Se conserva AL FINAL solo como último recurso de compatibilidad.
+//
+// ⚠️ SOLO INTERVENCIÓN. NUNCA se añaden claves del MENUDEO
+//    (tasaCambioCompraDolar, tasaCambioVentaDolar, tasaCambioCompraEuro, tasaCambioVentaEuro):
+//    mezclar ambos mercados fue el defecto que la refactorización anterior corrigió,
+//    y no se reintroduce.
+const CLAVES_TASA_INTERVENCION = ['tasaVenta', 'tasaCompra', 'tasaCambio', 'tasaReferencia'];
 
 function estadoIntervencionDesdeRespuesta(reglas, validar = null) {
   const out = {
@@ -1463,16 +1478,10 @@ async function intentarCompraApk() {
   if (op.disponible) {
     tasa = op.tasa;
     bot.tasaFuente = 'intervencion';
-  } else {
-    try { await webMercado(); } catch (_) { /* usar último dato */ }
-    const pub = tasaPublicadaMenudeo();
-    if (pub && pub.tasa > 0) {
-      tasa = pub.tasa;
-      bot.tasaFuente = pub.fuente;
-    }
   }
+  // La APK no sustituye la tasa de intervención: sin ella no se prepara la orden.
   if (tasa == null) {
-    throw new Error(`Sin tasa del banco disponible — ${op.motivo}`);
+    throw new Error(`Sin tasa de intervención — ${op.motivo}. No se usa menudeo ni caché (la APK no lo hace).`);
   }
   bot.tasaActual = tasa;
 
@@ -1540,10 +1549,13 @@ async function intentarCompraWeb() {
   }
   // ===================== TASA =====================
   // PRIORIDAD (igual que la versión histórica que SÍ obtenía la tasa):
-  //   1) EXRI  → tasaReferencia de la intervención (cuando el banco la publica). MÁXIMA prioridad.
-  //   2) MENUDEO en vivo (tasaCambioVentaDolar) → la tasa PUBLICADA que el banco mantiene
-  //      visible aunque la intervención esté cerrada. Se rotula 'menudeo-venta' para que
-  //      NUNCA se confunda con EXRI.
+  //   1) EXRI  → tasa de la intervención publicada por el banco en la consulta de reglas.
+  //      Es la ÚNICA fuente. La APK no tiene fallback: si la intervención no publica
+  //      tasa, la operación no se puede preparar.
+  // Evidencia APK: el modelo `reglas_divisas` (tabla SQL literal en libapp.so) contiene
+  // tasaVenta/tasaCompra; NO existe ningún camino de menudeo dentro del flujo de
+  // intervención. El menudeo de la APK es OTRO modelo (ResultadoMenudeo con
+  // tasaCambioVentaDolar) y OTRO endpoint, y no alimenta esta operación.
   // Nunca se usa caché histórica ni un valor fijo. El banco decide si acepta la orden.
   if (!tasas.intervencion.timestamp || edadMs(tasas.intervencion.timestamp) > FRESCURA_INTERVENCION_MS) {
     await actualizarIntervencion();
@@ -1557,7 +1569,7 @@ async function intentarCompraWeb() {
     tasa = op.tasa;
     bot.tasaFuente = 'intervencion';
     bot.tasaEsOperativaEXRI = true;
-    bot.tasaCampo = 'tasaReferencia';
+    bot.tasaCampo = tasas.intervencion.tasaCampo || 'tasaVenta';
     bot.tasaEdadMs = op.ageMs ?? null;
     if (!bot._exriAbiertaAvise) {
       bot._exriAbiertaAvise = true;
@@ -1565,29 +1577,11 @@ async function intentarCompraWeb() {
       notify('🎯 ¡VENTA DE DIVISAS ABIERTA!', `Tasa de la intervención: ${op.tasaTexto} Bs/USD — el bot está comprando`);
     }
   } else {
-    // --- EXRI cerrada/sin tasa: usar la TASA PUBLICADA del menudeo ---
+    // --- SIN tasa de intervención: NO se opera ---
+    // La APK no sustituye esta tasa por la del menudeo ni por ninguna otra:
+    // el flujo de intervención no avanza sin su propia tasa. Se espera al próximo ciclo.
     bot._exriAbiertaAvise = false;
-    // TASA VIGENTE: se consulta al banco EN CADA INTENTO, sin reutilizar el valor
-    // anterior (la versión histórica usaba webMercado({allowCached:false})).
-    // Así el payload siempre lleva la tasa que el banco publica AHORA: si cambió,
-    // este intento ya usa la nueva. Nunca se congela la tasa del arranque.
-    try { await webMercado(); } catch (_) { /* si falla, se usa el último dato válido */ }
-    const pub = tasaPublicadaMenudeo();
-    if (!pub || !(pub.tasa > 0)) {
-      // tampoco hay menudeo en vivo: NO se fabrica tasa. Se reintenta en el próximo ciclo.
-      throw new Error(`Sin tasa del banco disponible — ${op.motivo} (menudeo sin dato en vivo)`);
-    }
-    tasa = pub.tasa;
-    bot.tasaFuente = pub.fuente;          // 'menudeo-venta' | 'menudeo-compra'
-    bot.tasaEsOperativaEXRI = false;
-    // metadatos del dato REALMENTE usado (tras el refresco, no del valor anterior)
-    bot.tasaCampo = pub.campo;
-    bot.tasaEdadMs = pub.ageMs ?? null;
-    if (!bot._tasaPublicadaAvise || bot._tasaPublicadaValor !== pub.tasa) {
-      bot._tasaPublicadaAvise = true;
-      bot._tasaPublicadaValor = pub.tasa;
-      log('info', `[TASA] intervención cerrada (${op.motivo}) — usando tasa publicada del menudeo: ${pub.tasaTexto} Bs/USD · campo=${pub.campo} · fuente=${pub.fuente} (${pub.ageMs} ms)`);
-    }
+    throw new Error(`Sin tasa de intervención — ${op.motivo}. No se usa menudeo ni caché (la APK no lo hace).`);
   }
   // LOG OPERATIVO: detecta y registra cambios de tasa / estado / regla (ANTES → DESPUÉS)
   operDetectarCambios(op, tasas.intervencion);
@@ -1704,7 +1698,7 @@ async function intentarCompraWeb() {
     // --- TASA: el valor EXACTO que viajó en el payload, con su origen ---
     tasaEnviada: payload.tasaCambio,          // literal enviado en sellbuycurrencyEXCV
     tasaVigente: tasa,                        // valor resuelto (sin truncar)
-    fuenteTasa: bot.tasaFuente,               // 'intervencion' | 'menudeo-venta' | 'menudeo-compra'
+    fuenteTasa: bot.tasaFuente,               // 'intervencion' (única fuente; la APK no usa menudeo)
     campoTasaBanco: bot.tasaCampo || null,
     edadTasaMs: bot.tasaEdadMs ?? null,
     regla: payload.codigoRegla, disponibilidad: op.disponible ? 'ABIERTA' : 'CERRADA',
@@ -2119,22 +2113,18 @@ const server = http.createServer(async (req, res) => {
             await actualizarIntervencion();
           }
           const op = getTasaOperativa();
-          // Resolver la tasa igual que intentarCompraWeb(): EXRI primero, menudeo publicada después.
+          // Tasa de la orden: SOLO la de intervención. La APK no sustituye esta tasa
+          // por la del menudeo ni por ningún valor cacheado.
           let tasaOp = null, fuenteTasa = null;
           if (op.disponible) {
             tasaOp = op.tasa; fuenteTasa = 'intervencion';
-          } else {
-            // tasa publicada FRESCA (igual que intentarCompraWeb): nunca un valor anterior
-            try { await webMercado(); } catch (_) {}
-            const pub = tasaPublicadaMenudeo();
-            if (pub && pub.tasa > 0) { tasaOp = pub.tasa; fuenteTasa = pub.fuente; }
           }
           if (tasaOp == null) {
-            log('warn', `Orden NO enviada — sin tasa del banco: ${op.motivo}`);
+            log('warn', `Orden NO enviada — sin tasa de intervención: ${op.motivo}`);
             res.end(JSON.stringify({
               ok: false, sinTasaOperativa: true, motivo: op.motivo,
               intervencion: vistaIntervencion(),
-              error: `Sin tasa del banco disponible (${op.motivo}). No se envió ninguna orden.`
+              error: `Sin tasa de intervención (${op.motivo}). No se envió ninguna orden. No se usa menudeo (la APK no lo hace).`
             }));
             return;
           }
@@ -2179,7 +2169,7 @@ const server = http.createServer(async (req, res) => {
             cuentaOrigenBs: ctaD,
             cuentaDestino: ctaU,
             monto: String(monto),
-            tasaCambio: String(tasaOp),          // EXRI si está abierta; si no, menudeo publicada (en vivo)
+            tasaCambio: String(tasaOp),          // tasa de la intervención (única fuente del flujo APK)
             codigoRegla,
             codigoActividadEconomica: (act && act.id) || '',
             descOcupacion: (act && act.actividadEconomica) || o.descOcupacion || '',

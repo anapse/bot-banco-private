@@ -835,7 +835,7 @@ async function cargarCuentasCompra() {
 }
 // El campo de tasa PINTA la tasa que entregó el backend (state.tasas.operativa).
 // El panel NO elige tasa. Dos casos distintos y bien separados:
-//   1) EXRI abierta  → tasa de intervención (tasaReferencia). Operativa.
+//   1) EXRI abierta  → tasa de intervención (del modelo de reglas). Operativa.
 //   2) EXRI cerrada  → NO se dice "no hay tasa": si el banco publica la tasa del
 //      menudeo, se MUESTRA rotulada como publicada (NO operativa de intervención).
 function pintarTasaOperativa(op, iv) {
@@ -846,35 +846,26 @@ function pintarTasaOperativa(op, iv) {
     el.dataset.origen = op.origen || 'intervencion';
     el.dataset.timestamp = op.timestamp || '';
     el.style.color = 'var(--ok)';
-    el.title = 'Tasa de intervención (tasaReferencia) entregada por el servidor';
+    el.title = 'Tasa de intervención entregada por el banco (consulta de reglas EXRI)';
     if (fu) fu.textContent = 'Fuente: intervención · ' + ((iv && iv.endpoint) || 'consultarReglasEXRI') + (op.regla ? ` · regla ${op.regla}` : '');
     if (es) es.innerHTML = `<span class="ok">OPERATIVA</span> · ${op.edadTexto || ''}`;
-  } else if (op && op.tasaPublicada > 0) {
-    // Intervención cerrada PERO hay tasa publicada del menudeo en vivo.
-    el.value = (op.tasaPublicadaTexto || fmtNum(op.tasaPublicada)) + ' Bs';
-    el.dataset.tasa = String(op.tasaPublicada);
-    el.dataset.origen = op.fuenteTasaPublicada || 'menudeo';
-    el.dataset.timestamp = (op.publicadaMenudeo && op.publicadaMenudeo.timestamp) || '';
-    el.style.color = 'var(--muted)';
-    el.title = 'Tasa publicada por el banco (menudeo). La intervención está cerrada: no es la tasa operativa de la intervención.';
-    if (fu) fu.textContent = 'Fuente: ' + (op.fuenteTasaPublicada || 'menudeo') + ' · tasa publicada (NO operativa de intervención)';
-    if (es) es.innerHTML = `<span class="err">INTERVENCIÓN CERRADA</span> · tasa publicada disponible`;
   } else {
+    // Sin tasa de intervención: NO se sustituye por la del menudeo (la APK no lo hace).
     el.value = 'NO DISPONIBLE';
     el.dataset.tasa = '';
     el.dataset.origen = '';
     el.dataset.timestamp = '';
     el.style.color = 'var(--muted)';
     el.title = (op && op.motivo) || 'La intervención no está disponible';
-    if (fu) fu.textContent = 'Fuente: intervención · sin tasa publicada';
+    if (fu) fu.textContent = 'Fuente: intervención · sin tasa';
     if (es) es.innerHTML = `<span class="err">Sin tasa</span> · ${(op && op.motivo) || ''}`;
   }
 }
 // INDICADOR DE INTENTO — sólo interfaz. Responde a: "¿puedo empezar a intentar?".
 // Distingue 3 situaciones, sin confundir "tasa publicada" con "intervención abierta":
 //   1) TASA DISPONIBLE — PUEDES INICIAR LOS INTENTOS  (hay tasa publicada, interv. cerrada)
-//   2) INTERVENCIÓN ABIERTA — OPERATIVA               (EXRI con tasaReferencia)
-//   3) SIN TASA — ESPERA                              (ni EXRI ni menudeo)
+//   2) INTERVENCIÓN ABIERTA — OPERATIVA               (EXRI con tasa del banco)
+//   3) SIN TASA — ESPERA                              (la APK no sustituye por menudeo)
 // Se apaga/actualiza solo en cada refresco del panel.
 function pintarIndicadorIntento(op) {
   const box = $('indicadorIntento');
@@ -883,12 +874,11 @@ function pintarIndicadorIntento(op) {
   const iv = (state && state.tasas && state.tasas.intervencion) || {};
 
   const hayEXRI = !!(op && op.disponible && op.tasa > 0);
-  const hayPublicada = !!(op && op.tasaPublicada > 0);
-  const estado = hayEXRI ? 'abierta' : (hayPublicada ? 'publicada' : 'sin_tasa');
+  // Sin tasa de INTERVENCIÓN no hay nada que intentar: la APK no opera con menudeo.
+  const estado = hayEXRI ? 'abierta' : 'sin_tasa';
 
   const estilos = {
     abierta:   { borde: 'var(--ok,#2e7d32)',      fondo: 'rgba(46,125,50,.12)',  icono: '🟢' },
-    publicada: { borde: 'var(--ok,#2e7d32)',      fondo: 'rgba(46,125,50,.12)',  icono: '🟢' },
     sin_tasa:  { borde: 'var(--muted,#888)',      fondo: 'rgba(136,136,136,.10)',icono: '⏳' }
   };
   const e = estilos[estado];
@@ -907,24 +897,12 @@ function pintarIndicadorIntento(op) {
       + (op.regla ? ` · regla <b>${escapeHtml(op.regla)}</b>` : '')
       + `<br>El banco publicó su tasa: ya puedes operar.`
       + `<br><span class="muted">Intervención: <b>ABIERTA</b>${op.edadTexto ? ' · ' + escapeHtml(op.edadTexto) : ''}</span>`;
-  } else if (estado === 'publicada') {
-    const pm = op.publicadaMenudeo || {};
-    titulo.textContent = 'TASA DISPONIBLE — LISTO PARA INTENTAR';
-    titulo.style.color = e.borde;
-    badge.textContent = 'LISTO';
-    badge.style.color = e.borde;
-    det.innerHTML = `Tasa publicada: <b>${escapeHtml(op.tasaPublicadaTexto || fmtNum(op.tasaPublicada))} Bs/USD</b>`
-      + ` · fuente <b>${escapeHtml(op.fuenteTasaPublicada || 'menudeo')}</b>`
-      + (pm.campo ? ` <span class="muted">(${escapeHtml(pm.campo)})</span>` : '')
-      + `<br>Intervención: <b>CERRADA</b> <span class="muted">(estado independiente de la tasa)</span>`
-      + `<br>Puedes iniciar los intentos: el banco decide si acepta la orden.`
-      + (pm.timestamp ? `<br><span class="muted">Actualizada: ${escapeHtml(haceTexto(pm.timestamp))}</span>` : '');
   } else {
-    titulo.textContent = 'SIN TASA — ESPERA';
+    titulo.textContent = 'SIN TASA DE INTERVENCIÓN — ESPERA';
     titulo.style.color = e.borde;
     badge.textContent = 'ESPERAR';
     badge.style.color = e.borde;
-    det.innerHTML = `No hay tasa publicada disponible ahora`
+    det.innerHTML = `No hay tasa de intervención disponible ahora`
       + `<br><span class="muted">Intervención: <b>${escapeHtml(String(iv.estado || 'sin datos').toUpperCase())}</b>`
       + (op && op.motivo ? ` · ${escapeHtml(op.motivo)}` : '') + `</span>`;
   }
@@ -981,14 +959,13 @@ $('btnContinuar').onclick = async () => {
   msg.className = '';
   if (!ctaD) { msg.innerHTML = '❌ Elige la cuenta a debitar.'; return; }
   if (!ctaU) { msg.innerHTML = '❌ Elige la cuenta destino en USD.'; return; }
-  // Tasa disponible: EXRI (operativa) o, si la intervención está cerrada, la tasa
-  // PUBLICADA del menudeo en vivo. Nunca caché ni valor fijo.
-  const tasaUsar = op.disponible ? op.tasa
-    : (op.tasaPublicada > 0 ? op.tasaPublicada : null);
+  // Tasa de la orden: SOLO la de intervención. La APK no sustituye esta tasa por la
+  // del menudeo: el flujo de intervención no avanza sin su propia tasa.
+  const tasaUsar = op.disponible ? op.tasa : null;
   if (tasaUsar == null) {
     msg.className = 'err';
-    msg.innerHTML = '⛔ <b>Sin tasa disponible del banco</b> — ' + escapeHtml(op.motivo || 'la intervención no está disponible')
-      + '. No se puede preparar la operación.';
+    msg.innerHTML = '⛔ <b>Sin tasa de intervención</b> — ' + escapeHtml(op.motivo || 'la intervención no está disponible')
+      + '. No se puede preparar la operación (no se usa la tasa de menudeo).';
     return;
   }
   if (!monto || monto <= 0) { msg.innerHTML = '❌ Pon un monto válido.'; return; }
@@ -1001,27 +978,24 @@ $('btnContinuar').onclick = async () => {
   // COMPONENTES SEPARADOS. La comisión NO se calcula: sólo se muestra el porcentaje
   // que entregó el banco (la base de cálculo no está verificada contractualmente).
   const tasa = tasaUsar;
-  const esEXRI = !!op.disponible;
-  const etiquetaTasa = esEXRI ? 'Tasa (intervención)' : 'Tasa publicada';
-  const fuenteTasaTxt = esEXRI ? (op.origen || 'intervencion') : (op.fuenteTasaPublicada || 'menudeo');
+  const esEXRI = true;
+  const etiquetaTasa = 'Tasa (intervención)';
   const subtotal = monto * tasa;
   const comPct = op.porcentajeComision != null ? op.porcentajeComision : null;
   const cas = (label, val) => `<div class="casilla"><label>${label}</label><div class="v">${val}</div></div>`;
   $('compraResumen').innerHTML = [
     cas('Monto en divisas', fmtNum(monto) + ' $'),
-    cas(etiquetaTasa, ((esEXRI ? op.tasaTexto : op.tasaPublicadaTexto) || fmtNum(tasa)) + ' Bs'),
+    cas(etiquetaTasa, (op.tasaTexto || fmtNum(tasa)) + ' Bs'),
     cas('Subtotal (monto × tasa)', fmtNum(subtotal) + ' Bs'),
     cas('Comisión', comPct != null ? `según banco (${fmtNum(comPct)} %)` : 'según banco'),
     cas('Total', comPct != null ? `≈ ${fmtNum(subtotal)} Bs + comisión del banco` : fmtNum(subtotal) + ' Bs'),
     cas('Origen (Bs)', ctaD),
     cas('Destino (USD)', ctaU),
     cas('Destino de los fondos', $('fDestino').value),
-    cas('Mercado', esEXRI ? 'INTERVENCIÓN' : 'MENUDEO (tasa publicada)'),
+    cas('Mercado', 'INTERVENCIÓN'),
   ].join('');
   msg.className = '';
-  msg.innerHTML = esEXRI
-    ? `<span class="muted">Tasa operativa de intervención: ${escapeHtml(op.tasaTexto || '')} (${escapeHtml(op.origen || '')}, ${escapeHtml(op.edadTexto || '')}). El servidor revalidará la tasa al enviar.</span>`
-    : `<span class="muted">Intervención cerrada. Se usará la <b>tasa publicada</b> (${escapeHtml(fuenteTasaTxt)}): ${escapeHtml(op.tasaPublicadaTexto || '')} Bs/USD. El servidor revalidará al enviar y el banco decide si acepta la orden.</span>`;
+  msg.innerHTML = `<span class="muted">Tasa operativa de intervención: ${escapeHtml(op.tasaTexto || '')} (${escapeHtml(op.origen || '')}, ${escapeHtml(op.edadTexto || '')}). El servidor revalidará la tasa al enviar.</span>`;
   $('compraEjecutar').innerHTML = `
     <div class="hint" style="margin-bottom:10px">Verifica los datos. <b>Confirmar y ejecutar compra</b> envía una orden ahora. <b>AUTORREENVÍO</b> es el bot: arranca el ciclo automático que consulta al banco, mantiene la tasa vigente y reintenta la compra en cada vuelta hasta que el banco acepte o lo detengas.</div>
     <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap">
@@ -1286,7 +1260,7 @@ const IMPLEMENTADOS = [
   ['GET',  '/obtenercuentadivisa/getCuentaDivisa', 'Cuentas en divisas (destino USD)'],
   ['POST', '/menudeo/consulta-mercado/', 'Tasas de MENUDEO — sólo referencia, NO operativa'],
   ['POST', '/consulta-saldo-cuenta-cliente/consulta/saldo', 'Saldo disponible (mantenimiento nocturno)'],
-  ['POST', '/altaintervencioncambiaria/consultarReglasEXRI', 'Tasa de INTERVENCIÓN (tasaReferencia) — la única operativa'],
+  ['POST', '/altaintervencioncambiaria/consultarReglasEXRI', 'Tasa de INTERVENCIÓN — la única operativa'],
   ['GET',  '/altaintervencioncambiaria/obtenerDataCombo', 'Catálogo: actividades económicas y destinos'],
   ['POST', '/mesacambiaria/sellbuycurrencyEXCV', 'EJECUTAR la compra de divisas (requiere intervención abierta)'],
   ['POST', '/picconsultamovimientos/queryLastMovements', 'Movimientos de la cuenta (historial)'],
