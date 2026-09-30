@@ -2465,28 +2465,21 @@ const server = http.createServer(async (req, res) => {
   } catch (_) { res.statusCode = 404; res.end('no encontrado'); }
 });
 
-// restaurar sesión web persistida (al final: WEB y helpers ya definidos)
-try {
-  const ws = JSON.parse(fs.readFileSync(path.join(ROOT, 'web-session.json'), 'utf8'));
-  if (ws && ws.ticketId) { bot.webTicket = ws.ticketId; bot.webUser = ws.user; bot.user = ws.user; bot.webLoginData = ws.data || null; if (bot.webLoginData && bot.webLoginData.data) bot.webLoginData.datos = decryptWebData(bot.webLoginData.data); }
-} catch (_) {}
-
-// al arrancar: si hay sesión guardada con refresh_token, renóvala para restaurarla sin re-loguear
-// AL ARRANCAR: pasa por el CANDADO ÚNICO. Antes llamaba a webRenew() directamente,
-// arrancando su propia autenticación en paralelo con los intervalos (uno de los 4
-// caminos del problema). Ahora comparte la misma promesa que todos los demás.
+// ============================================================================
+// Separación de fuentes: DETECCIÓN (APK) vs SESIÓN WEB (legacy).
+//
+// La detección de disponibilidad usa EXCLUSIVAMENTE el canal APK
+// (apkApi.estadoCompra → reglas/compra → code 1000). NO depende de la sesión
+// WEB ni del login del portal. Arranca por sí sola y consulta el endpoint APK
+// con el token APK (BDV_ACCESS_TOKEN / token-apk.json), sin tocar bdvenlinea.
+//
+// La sesión WEB (webLogin/asegurarSesionWeb/web-session.json) queda AISLADA:
+// solo se usa si se invoca explícitamente el login del portal vía REST, NO en
+// el arranque automático. Sirve únicamente como LEGACY mientras el login APK
+// (app-key/secret runtime) no esté disponible.
+// ============================================================================
+// Estado de la INTERVENCIÓN al iniciar (canal APK — fuente única). No requiere sesión web.
 setTimeout(async () => {
-  if (bot.webLoginData && bot.webLoginData.data && bot.webLoginData.data.refresh_token) {
-    try { await asegurarSesionWeb(); log('info', 'Sesión restaurada automáticamente al iniciar'); }
-    catch (e) { log('warn', `No se pudo restaurar sesión al iniciar: ${e.message}`); }
-  }
-  // precargar combo de actividad económica (lo exige el payload de compra) y reglas EXRI
-  try {
-    const r = await webApi('/altaintervencioncambiaria/obtenerDataCombo', 'GET');
-    bot.webCombo = r && r.data ? r.data : r;
-    log('info', `Combo de actividades cargado (${((bot.webCombo && bot.webCombo.actividad) || []).length} actividades)`);
-  } catch (_) {}
-  // Estado de la INTERVENCIÓN al iniciar (fuente única)
   try {
     const t = await actualizarIntervencion();
     const op = getTasaOperativa();
