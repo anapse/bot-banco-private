@@ -318,7 +318,7 @@ const tasas = {
     porcentajeComision: null,   // tal como lo entrega el banco
     timestamp: null,            // ISO de la consulta que la produjo
     ageMs: null,
-    endpoint: '/altaintervencioncambiaria/consultarReglasEXRI',
+    endpoint: '/bdvx-operaciones-cambiarias/v1/operaciones/consultar/reglas/compra',
     httpStatus: null,
     error: null,
     raw: null,                  // respuesta completa (diagnóstico interno; NO se envía al panel)
@@ -427,98 +427,72 @@ function logTasas(extra = '') {
 //    y no se reintroduce.
 const CLAVES_TASA_INTERVENCION = ['tasaVenta', 'tasaCompra', 'tasaCambio', 'tasaReferencia'];
 
-function estadoIntervencionDesdeRespuesta(reglas, validar = null) {
+/*
+ * Decodifica la respuesta de DISPONIBILIDAD del canal APK
+ * (`/bdvx-operaciones-cambiarias/v1/operaciones/consultar/reglas/compra`).
+ *
+ * Evidencia de la APK (libapp.so):
+ *   · la disponibilidad se decide comparando `response` contra el literal `1000`
+ *     (`getReglasByMonedaRetiro != 1000`, `response != 1000`).
+ *   · la respuesta es un objeto `{ code, message, data }`, no una lista.
+ *
+ * Solo se interpreta `code === '1000'` como DISPONIBLE. Cualquier otro valor
+ * (1001, 1003, 01, etc.) se reporta como NO DISPONIBLE sin inventar su
+ * significado: la APK no deja literal que explique 1002/1003.
+ */
+function estadoIntervencionDesdeRespuesta(resp) {
   const out = {
     estado: 'sin_datos', abierta: false, code: null, regla: null, description: null,
     tasaReferencia: null, tasaTexto: null, tasaCampo: null, cupoPersNaturales: null,
-    porcentajeComision: null, items: Array.isArray(reglas) ? reglas.length : (reglas ? 1 : 0),
-    senalApertura: null, senalCierre: null, raw: reglas ?? null
+    porcentajeComision: null, items: 0,
+    senalApertura: null, senalCierre: null, raw: resp ?? null
   };
-  const items = [];
-  if (Array.isArray(reglas)) items.push(...reglas);
-  else if (reglas && typeof reglas === 'object') items.push(reglas, reglas.data);
-  for (const it of items) {
-    if (!it || typeof it !== 'object') continue;
-    const srcs = [it, it.data, it.data && it.data.data];
-    for (const s of srcs) {
-      if (!s || typeof s !== 'object') continue;
-      if (out.code == null && (s.code != null || s.codigo != null)) out.code = String(s.code != null ? s.code : s.codigo);
-      if (out.regla == null && (s.regla || s.codigoRegla)) out.regla = String(s.regla || s.codigoRegla);
-      if (out.description == null && (s.description || s.descripcion)) out.description = String(s.description || s.descripcion);
-      if (out.tasaTexto == null) {
-        // TOLERANCIA A NOMBRES DE CAMPO (recuperado de la versión que SÍ obtenía la tasa).
-        // El banco no siempre publica la tasa en 'tasaReferencia': puede venir en
-        // 'tasaCambio' / 'tasa' / 'tasaMaxima' / 'tasaVenta'. La APK oficial confirma
-        // que usa variantes de 'tasaCambio*' y 'tasaCompra'/'tasaVenta' — 'tasaReferencia'
-        // apenas aparece (1 vez) en su binario.
-        // IMPORTANTE: SOLO claves de INTERVENCIÓN. NUNCA se incluyen las del MENUDEO
-        // (tasaCambioCompraDolar/VentaDolar/…Dolar/…Euro): mezclar mercados fue el error
-        // que la refactorización anterior quiso corregir y no se reintroduce.
-        for (const k of CLAVES_TASA_INTERVENCION) {
-          if (s[k] != null) { out.tasaTexto = String(s[k]); out.tasaCampo = k; break; }
-        }
+  const r = resp && typeof resp === 'object' ? resp : {};
+  const code = (r.code != null || r.codigo != null) ? String(r.code != null ? r.code : r.codigo) : null;
+  out.code = code;
+  out.description = (r.message || r.descripcion || r.description) ?? null;
+
+  // datos útiles si el banco los entrega (regla, cupo, comisión, tasa)
+  const data = r.data && typeof r.data === 'object' ? r.data : null;
+  const srcs = [r, data].filter((x) => x && typeof x === 'object');
+  for (const s of srcs) {
+    if (out.regla == null && (s.regla || s.codigoRegla)) out.regla = String(s.regla || s.codigoRegla);
+    if (out.cupoPersNaturales == null && s.cupoPersNaturales != null) out.cupoPersNaturales = s.cupoPersNaturales;
+    if (out.porcentajeComision == null && (s.porcentajeComision ?? s.porcentajeComision1) != null) out.porcentajeComision = s.porcentajeComision ?? s.porcentajeComision1;
+    if (out.tasaTexto == null) {
+      for (const k of CLAVES_TASA_INTERVENCION) {
+        if (s[k] != null) { out.tasaTexto = String(s[k]); out.tasaCampo = k; break; }
       }
-      if (out.cupoPersNaturales == null && s.cupoPersNaturales != null) out.cupoPersNaturales = s.cupoPersNaturales;
-      if (out.porcentajeComision == null && s.porcentajeComision != null) out.porcentajeComision = s.porcentajeComision;
     }
-    if (out.regla == null && it.regla) out.regla = String(it.regla);
-    if (out.code == null && it.code != null) out.code = String(it.code);
   }
   out.tasaReferencia = parseNumeroBanco(out.tasaTexto);
-  const tasaPublicada = out.tasaReferencia != null && out.tasaReferencia > 0;
+  out.items = data ? 1 : 0;
 
-  // --- señales de CERRADO (verificadas contra respuestas reales) ---
-  const desc = (out.description || '').toLowerCase();
-  const cerrDescripcion = /no disponible|intente m[aá]s tarde|no se encuentra/.test(desc);
-  const cerrValidar = !!(validar && (String(validar.code) === '1001' || /disponibles m[aá]s tarde/i.test(String(validar.message || ''))));
-  const code01 = out.code === '01';
-  const todosVacios = out.code == null && !tasaPublicada && out.cupoPersNaturales == null && out.porcentajeComision == null;
-
-  // --- CÓDIGOS DE APERTURA ---
-  // El APK oficial compara contra 1000 (`getReglasByMonedaRetiro != 1000`,
-  // `response != 1000`), y el camino de compra de este mismo bot ya acepta
-  // '00' || '1000' en clasificarRespuestaCompra(). El parser de intervención se
-  // había quedado sólo con '00': una respuesta de apertura con code 1000 caía en
-  // 'desconocido' y el bot NO compraba. Se alinean ambos caminos.
-  const esCodeApertura = out.code === '00' || out.code === '1000';
-
-  if (code01 || cerrDescripcion || cerrValidar || todosVacios) {
+  // ÚNICA señal de disponibilidad que demuestra la APK: code === '1000'.
+  if (code === '1000') {
+    out.estado = 'abierta';
+    out.abierta = true;
+    out.senalApertura = "code '1000' (disponibilidad del canal APK — verificado en libapp.so)";
+  } else if (code != null) {
     out.estado = 'cerrada';
     out.abierta = false;
-    out.senalCierre = code01 ? "code '01' (verificado)"
-      : cerrDescripcion ? 'description "no disponible" (verificado)'
-      : cerrValidar ? 'validar-subasta code ' + validar.code + ' (verificado)'
-      : 'respuesta vacía sin tasa ni cupos (verificado)';
-  } else if (esCodeApertura) {
-    out.estado = 'abierta';
-    out.abierta = true;
-    out.senalApertura = out.code === '1000'
-      ? "code '1000' (código de éxito del APK oficial)"
-      : "code '00' (código de éxito del portal)";
-    if (tasaPublicada) out.senalApertura += ` + tasa ${out.tasaTexto}`;
-  } else if (tasaPublicada) {
-    out.estado = 'abierta';
-    out.abierta = true;
-    out.senalApertura = 'tasa de intervención publicada por el banco (dato real; SEÑAL DE APERTURA NO VERIFICADA)';
+    out.senalCierre = `code '${code}' (no disponible)`;
   } else {
-    out.estado = 'desconocido';
+    out.estado = 'sin_datos';
     out.abierta = false;
-  }
-  // contradicción: código de cerrado pero con tasa publicada → cerrado manda
-  if (!out.abierta && tasaPublicada) {
-    out.senalCierre += ` + tasa publicada ${out.tasaTexto} (contradicción: se prioriza el cierre)`;
+    out.senalCierre = 'sin código de respuesta';
   }
   return out;
 }
-// Refresca el estado de la intervención y actualiza el modelo central
+// Refresca el estado de la intervención y actualiza el modelo central.
+// FUENTE: canal APK (`/bdvx-operaciones-cambiarias/v1/operaciones/consultar/reglas/compra`).
+// NO usa el portal (bdvenlinea) ni `validar-subasta` para la detección.
 async function actualizarIntervencion() {
   const t = tasas.intervencion;
   try {
-    // señal CORROBORANTE de cierre: /validar-mercado/validar-subasta (endpoint ya existente)
-    let validar = null;
-    try { validar = await webValidarMercado(); } catch (_) {}
-    const reglas = await webReglasEXRI();
-    const st = estadoIntervencionDesdeRespuesta(reglas, validar);
+    // Disponibilidad por el canal del APK (code === '1000' = disponible).
+    const compra = await apkApi.estadoCompra();
+    const st = estadoIntervencionDesdeRespuesta(compra);
     t.estado = st.estado;
     t.abierta = st.abierta;
     t.code = st.code;
@@ -527,27 +501,23 @@ async function actualizarIntervencion() {
     t.raw = st.raw;
     t.senalApertura = st.senalApertura;
     t.senalCierre = st.senalCierre;
-    t.validarMercado = validar ? { code: validar.code ?? null, message: validar.message ?? null } : null;
-    // La tasa de intervención sólo se da por válida si el banco marcó abierta
+    t.validarMercado = null; // ya no se consulta validar-subasta (portal)
+    // La tasa de intervención sólo se da por válida si el banco marcó disponible.
     if (st.abierta && st.tasaReferencia != null && st.tasaReferencia > 0) {
       t.tasa = st.tasaReferencia;
       t.tasaTexto = st.tasaTexto;
     } else {
       t.tasa = null;
-      t.tasaTexto = st.tasaTexto;   // se conserva el texto crudo si vino (sin usarlo como operativo)
+      t.tasaTexto = st.tasaTexto;
     }
     t.cupoPersNaturales = st.abierta ? st.cupoPersNaturales : null;
     t.porcentajeComision = st.abierta ? st.porcentajeComision : null;
     t.timestamp = nowIso();
     t.ageMs = 0;
     t.error = null;
-    t.httpStatus = 200;
-    // códigos/huecos no clasificados: dejar constancia completa para diagnóstico
-    if (t.estado === 'desconocido') {
-      log('warn', `[MERCADO] estado DESCONOCIDO (code=${t.code == null ? 'sin-code' : t.code}) — respuesta: ${resumenRespuesta(st.raw)}`);
-    }
-    if (t.senalCierre && t.senalCierre.includes('contradicción')) {
-      log('warn', `[MERCADO] contradicción de señales: ${t.senalCierre}`);
+    t.httpStatus = compra.httpStatus ?? null;
+    if (t.estado === 'sin_datos') {
+      log('warn', `[MERCADO] sin respuesta del canal APK — respuesta: ${resumenRespuesta(st.raw)}`);
     }
   } catch (e) {
     t.estado = 'error';
@@ -2318,8 +2288,6 @@ const server = http.createServer(async (req, res) => {
         // Estado REAL de la INTERVENCIÓN (Divisas). Devuelve el MODELO CENTRAL:
         // el panel no decide nada, sólo pinta lo que hay aquí.
         try {
-          let mercado = null;
-          try { mercado = await webValidarMercado(); } catch (_) {}
           const t = await actualizarIntervencion();
           logTasas('fuente=/api/web-intervencion');
           res.end(JSON.stringify({
@@ -2327,7 +2295,6 @@ const server = http.createServer(async (req, res) => {
             operativa: getTasaOperativa(),
             intervencion: vistaIntervencion(),
             menudeo: vistaMenudeo(),
-            mercado,                    // respuesta del servicio de mercado (estado del banco)
             contrato: t.contrato
           }));
         } catch (e) {
@@ -2571,10 +2538,10 @@ if (process.env.BDV_MONITOR_ONLY !== 'true') setInterval(async () => {
 }, 300000);
 
 // INTERVENCIÓN: refrescar estado + tasa cada 30 s AUNQUE el bot no esté corriendo.
-// Así el panel refleja la tasa real en cuanto el banco la publica, sin que el envío
-// de la orden pierda tiempo consultando.
+// Así el panel refleja el estado real del canal APK en cuanto el banco publica 1000.
+// La detección ya NO depende de la sesión del portal: usa el canal APK (token propio).
 if (process.env.BDV_MONITOR_ONLY !== 'true') setInterval(async () => {
-  if (!bot.webLoginData || !bot.webLoginData.data) return;
+  if (!apkApi.leerToken()) return;   // sin token: no hay nada que consultar
   const antes = tasas.intervencion.estado;
   try {
     const t = await actualizarIntervencion();
@@ -2633,28 +2600,15 @@ if (process.env.BDV_MONITOR_ONLY === 'true') {
         && bot.webSaldo.data.saldoDisponible),
       codigoRegla: () => bot.webCodigoRegla || null,
 
-      // --- las 3 consultas reales, con el parser del proyecto ---
+      // --- consulta de detección por el canal APK (code === '1000') ---
       consultarTodo: async () => {
-        let validar = null;
-        try { validar = await webValidarMercado(); } catch (_) {}
-        const reglasCrudas = await webReglasEXRI();
-        const st = estadoIntervencionDesdeRespuesta(reglasCrudas, validar);
-        await webMercado();
-
-        // marcar el estado (igual que actualizarIntervencion) para que getTasaOperativa lo vea
-        const t = tasas.intervencion;
-        t.estado = st.estado; t.abierta = st.abierta; t.code = st.code; t.regla = st.regla;
-        t.description = st.description; t.raw = st.raw;
-        t.senalApertura = st.senalApertura; t.senalCierre = st.senalCierre;
-        t.tasa = (st.abierta && st.tasaReferencia > 0) ? st.tasaReferencia : null;
-        t.tasaTexto = st.tasaTexto;
-        t.cupoPersNaturales = st.abierta ? st.cupoPersNaturales : null;
-        t.porcentajeComision = st.abierta ? st.porcentajeComision : null;
-        t.timestamp = nowIso(); t.error = null; t.httpStatus = 200;
-        if (st.abierta && st.regla) bot.webCodigoRegla = bot.webCodigoRegla || st.regla;
-
+        const t = await actualizarIntervencion();   // canal APK (reglas/compra)
+        const st = { code: t.code, estado: t.estado, abierta: t.abierta, regla: t.regla,
+          description: t.description, tasaReferencia: t.tasa ?? null, tasaTexto: t.tasaTexto,
+          tasaCampo: tasas.intervencion.tasaCampo, cupoPersNaturales: t.cupoPersNaturales,
+          porcentajeComision: t.porcentajeComision, senalApertura: t.senalApertura,
+          senalCierre: t.senalCierre, items: (t.raw && t.raw.data ? 1 : 0), raw: t.raw };
         const m = tasas.menudeo;
-        const item0 = Array.isArray(reglasCrudas) ? (reglasCrudas[0] || {}) : (reglasCrudas || {});
 
         return {
           exri: {
@@ -2663,16 +2617,10 @@ if (process.env.BDV_MONITOR_ONLY === 'true') {
             tasaReferencia: st.tasaReferencia, tasaTexto: st.tasaTexto, tasaCampo: st.tasaCampo,
             cupoPersNaturales: st.cupoPersNaturales, porcentajeComision: st.porcentajeComision,
             senalApertura: st.senalApertura, senalCierre: st.senalCierre,
-            dataEsNull: item0.data === null || item0.data === undefined,
+            dataEsNull: !(t.raw && t.raw.data != null),
             items: st.items, raw: st.raw,
           },
-          subasta: {
-            httpStatus: validar ? (validar.httpStatus ?? 200) : null,
-            code: validar ? validar.code : null,
-            status: validar ? validar.status : null,
-            message: validar ? validar.message : null,
-            raw: validar || null,
-          },
+          subasta: null,   // ya no se consulta validar-subasta (portal)
           mercado: {
             estadoPolitica: m.estadoPolitica ?? null,
             ventaUSDTexto: m.ventaUSDTexto ?? null,

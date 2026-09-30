@@ -85,7 +85,14 @@ function leerToken() {
     }
   } catch (_) { /* seguir */ }
 
-  // 2) token de la sesión del portal
+  // 2) BDV_ACCESS_TOKEN del .env (token explícitamente provisto por el usuario)
+  try {
+    const env = fs.readFileSync(path.join(RAIZ, '.env'), 'utf8');
+    const m = env.match(/^\s*BDV_ACCESS_TOKEN\s*=\s*(.+)\s*$/m);
+    if (m) { const t = m[1].replace(/^["']|["']$/g, '').trim(); if (t) return t; }
+  } catch (_) { /* seguir */ }
+
+  // 3) token de la sesión del portal (compatibilidad mientras exista)
   try {
     const s = JSON.parse(fs.readFileSync(path.join(RAIZ, 'web-session.json'), 'utf8'));
     const t = s && s.data && s.data.data && s.data.data.access_token;
