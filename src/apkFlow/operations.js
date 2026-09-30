@@ -37,16 +37,19 @@ const estados       = () => consultar('estados',         'ESTADOS');
 const oficinas      = () => consultar('oficinas',        'OFICINAS');
 
 /**
- * Construye el payload de compra con los nombres de campo REALES de la APK.
+ * Construye el payload de compra con los nombres de campo REALES del APK.
+ * Evidencia del binario: OperacionDivisas{cuentaOrigenBs, cuentaDestinoDivisa}
+ * y los campos montoDivisa / codigoDivisa.
  * Los valores salen de la config del proyecto y de las respuestas del banco.
  */
 function construirPayload({ cuentaOrigenBs, cuentaDestinoDivisa, monto,
                             tasa, codigoRegla, codigoActividadEconomica,
-                            descOcupacion, destinoFondos }) {
+                            descOcupacion, destinoFondos, codigoDivisa }) {
   return {
     cuentaOrigenBs,
     cuentaDestinoDivisa,           // nombre del modelo OperacionDivisas
-    monto: Number(monto).toFixed(2),
+    montoDivisa: Number(monto).toFixed(2),
+    codigoDivisa: codigoDivisa || 'USD',
     tasaCambio: Number(tasa).toFixed(4),
     codigoRegla,
     codigoActividadEconomica,

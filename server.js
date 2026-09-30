@@ -1684,15 +1684,15 @@ async function intentarCompraWeb() {
     httpStatus: env.httpStatus, endpoint: env.endpoint, code: cod, estado: estadoBanco,
     message: msgBanco, description: descBanco, correlacion: env.correlacion,
     errorTransporte: env.error || null, timestamp: nowIso(),
-    request: { monto: payload.monto, tasaCambio: payload.tasaCambio, codigoRegla: payload.codigoRegla, codigoActividadEconomica: payload.codigoActividadEconomica, destinoFondos: payload.destinoFondos }
+    request: { montoDivisa: payload.montoDivisa, tasaCambio: payload.tasaCambio, codigoRegla: payload.codigoRegla, codigoActividadEconomica: payload.codigoActividadEconomica, destinoFondos: payload.destinoFondos }
   };
   // LOG OPERATIVO: intento de compra con solicitud enviada y respuesta REAL del banco
   operLog({
     tipo: 'compra',
     endpoint: env.endpoint, metodo: 'POST',
     solicitud: {
-      cuentaOrigenBs: maskCuenta(payload.cuentaOrigenBs), cuentaDestino: maskCuenta(payload.cuentaDestino),
-      monto: payload.monto, tasaCambio: payload.tasaCambio, codigoRegla: payload.codigoRegla,
+      cuentaOrigenBs: maskCuenta(payload.cuentaOrigenBs), cuentaDestinoDivisa: maskCuenta(payload.cuentaDestinoDivisa),
+      montoDivisa: payload.montoDivisa, tasaCambio: payload.tasaCambio, codigoRegla: payload.codigoRegla,
       codigoActividadEconomica: payload.codigoActividadEconomica, destinoFondos: payload.destinoFondos
     },
     httpStatus: env.httpStatus,

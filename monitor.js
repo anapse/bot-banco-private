@@ -287,7 +287,7 @@ async function comprar(payload, exri) {
     S.purchase_confirmed = true;
     S.ultimaCompra = {
       hora: nowIso(),
-      monto: payload.monto,
+      monto: payload.montoDivisa,
       tasa: payload.tasaCambio,
       referencia: res.referencia || res.operacionId || '—',
       regla: payload.codigoRegla,

@@ -58,9 +58,8 @@ function construirCompra(c, exri, reglas) {
     // --- modelo OperacionDivisas{cuentaOrigenBs, cuentaDestinoDivisa}
     cuentaOrigenBs: c.cuentaDebito,
     cuentaDestinoDivisa: c.cuentaDestino,
-    // --- modelo TransaccionMenudeo{montoDivisas, monto}
-    monto: Number(c.montoMaxUSD).toFixed(2),
-    montoDivisas: Number(c.montoMaxUSD).toFixed(2),
+    // --- monto en divisas (nombre del binario: montoDivisa)
+    montoDivisa: Number(c.montoMaxUSD).toFixed(2),
     tasaCambio: Number(exri.tasa || 0).toFixed(4),
     // --- reglas / clasificacion (del binario)
     codigoRegla: r0.codigoRegla || exri.regla || null,
@@ -183,7 +182,7 @@ async function ciclo() {
     console.log('               ✅ COMPRA CONFIRMADA');
     console.log(L);
     console.log(`  Intento #${S.intentos}`);
-    console.log(`  Monto   : ${payload.monto} USD`);
+    console.log(`  Monto   : ${payload.montoDivisa} USD`);
     console.log(`  Tasa    : ${payload.tasaCambio} Bs`);
     console.log(`  Respuesta: ${JSON.stringify(r.json)}`);
     console.log(L + '\n');

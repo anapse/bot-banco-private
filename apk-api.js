@@ -222,15 +222,23 @@ async function estadoCompleto() {
    ============================================================ */
 
 /**
- * Construye el payload de compra con el esquema del APK (OperacionDivisas).
+ * Construye el payload de compra con el esquema REAL del APK.
+ *
+ * Evidencia (binario + contrato del gateway):
+ *  · OperacionDivisas{cuentaOrigenBs, cuentaDestinoDivisa}  ← libapp.so
+ *  · … , montoDivisa: … , codigoDivisa: …                   ← libapp.so
+ *  · el gateway exige: cuentaOrigenBs, cuentaDestinoDivisa,
+ *    montoDivisa, codigoDivisa (confirmado por validación del servidor)
+ *
  * @param {object} cfg configuración con cuentas, monto y códigos
  * @param {number} [tasa] tasa a enviar (si no se pasa, no se incluye)
  */
 function construirPayload(cfg, tasa = null) {
   const p = {
     cuentaOrigenBs: cfg.cuentaDebito,
-    cuentaDestino: cfg.cuentaDestino,
-    monto: String(cfg.montoMaxUSD ?? 10),
+    cuentaDestinoDivisa: cfg.cuentaDestino,
+    montoDivisa: String(cfg.montoMaxUSD ?? 10),
+    codigoDivisa: cfg.codigoDivisa || 'USD',
     codigoRegla: cfg.codigoRegla || 'RGLIC',
     codigoActividadEconomica: String(cfg.codigoActividadEconomica ?? '22'),
     destinoFondos: String(cfg.destinoFondos ?? '11'),
