@@ -921,8 +921,15 @@ function syncBotonAuto(b) {
   window._autoServidorActivo = activo;
   if (!st) return;
   if (activo) {
+    // TRES ESTADOS INDEPENDIENTES: encendido / intervención / datos de operación.
+    // Estar encendido NO depende de que haya tasa: se informa "esperando", no "bloqueado".
+    const eg = (state && state.estados) || {};
     const uc = window._ultimaCompra;
-    st.innerHTML = `🟢 <b>BOT TRABAJANDO</b> — intento <b>#${b.rechazos || 0}</b> · chequeos ${b.checks || 0}`
+    const lineaEstados = eg.texto
+      ? `<br><span class="muted">${escapeHtml(eg.texto)}</span>`
+      : '';
+    st.innerHTML = `🟢 <b>BOT ENCENDIDO</b> — intento <b>#${b.rechazos || 0}</b> · chequeos ${b.checks || 0}`
+      + lineaEstados
       + (b.saldoInsuficiente ? ' · <span style="color:var(--gold)">⚠️ sin fondos</span>' : '')
       + (b.lastCheck ? `<br><span class="muted">Última consulta al banco: ${new Date(b.lastCheck).toLocaleTimeString()}</span>` : '')
       + (uc ? `<br><span class="muted">Última compra: ${uc.montoUSD} USD @ ${uc.tasa} Bs · ref ${uc.referencia}</span>` : '');
@@ -959,47 +966,58 @@ $('btnContinuar').onclick = async () => {
   msg.className = '';
   if (!ctaD) { msg.innerHTML = '❌ Elige la cuenta a debitar.'; return; }
   if (!ctaU) { msg.innerHTML = '❌ Elige la cuenta destino en USD.'; return; }
-  // Tasa de la orden: SOLO la de intervención. La APK no sustituye esta tasa por la
-  // del menudeo: el flujo de intervención no avanza sin su propia tasa.
-  const tasaUsar = op.disponible ? op.tasa : null;
-  if (tasaUsar == null) {
-    msg.className = 'err';
-    msg.innerHTML = '⛔ <b>Sin tasa de intervención</b> — ' + escapeHtml(op.motivo || 'la intervención no está disponible')
-      + '. No se puede preparar la operación (no se usa la tasa de menudeo).';
-    return;
-  }
   if (!monto || monto <= 0) { msg.innerHTML = '❌ Pon un monto válido.'; return; }
-  // cupo REAL de la intervención (cupoPersNaturales del banco) si está disponible; si no, no se inventa límite
-  const cupoReal = iv.cupoPersNaturales;
-  if (cupoReal != null && monto > Number(cupoReal)) {
-    msg.innerHTML = `❌ El cupo máximo del banco es ${fmtNum(cupoReal)} $ (cupoPersNaturales).`;
-    return;
+  // Tasa de la orden: SOLO la de intervención. La APK no sustituye esta tasa por la
+  // del menudeo. La ausencia de tasa NO impide encender el bot: sólo impide que la
+  // operación esté LISTA. El ciclo del servidor monitoriza y reintenta por su cuenta.
+  const tasaUsar = op.disponible ? op.tasa : null;
+  const sinTasa = tasaUsar == null;
+  if (!sinTasa) {
+    // cupo REAL de la intervención (cupoPersNaturales del banco) si está disponible; si no, no se inventa límite
+    const cupoReal = iv.cupoPersNaturales;
+    if (cupoReal != null && monto > Number(cupoReal)) {
+      msg.innerHTML = `❌ El cupo máximo del banco es ${fmtNum(cupoReal)} $ (cupoPersNaturales).`;
+      return;
+    }
+    // COMPONENTES SEPARADOS. La comisión NO se calcula: sólo se muestra el porcentaje
+    // que entregó el banco (la base de cálculo no está verificada contractualmente).
+    const tasa = tasaUsar;
+    const etiquetaTasa = 'Tasa (intervención)';
+    const subtotal = monto * tasa;
+    const comPct = op.porcentajeComision != null ? op.porcentajeComision : null;
+    const cas = (label, val) => `<div class="casilla"><label>${label}</label><div class="v">${val}</div></div>`;
+    $('compraResumen').innerHTML = [
+      cas('Monto en divisas', fmtNum(monto) + ' $'),
+      cas(etiquetaTasa, (op.tasaTexto || fmtNum(tasa)) + ' Bs'),
+      cas('Subtotal (monto × tasa)', fmtNum(subtotal) + ' Bs'),
+      cas('Comisión', comPct != null ? `según banco (${fmtNum(comPct)} %)` : 'según banco'),
+      cas('Total', comPct != null ? `≈ ${fmtNum(subtotal)} Bs + comisión del banco` : fmtNum(subtotal) + ' Bs'),
+      cas('Origen (Bs)', ctaD),
+      cas('Destino (USD)', ctaU),
+      cas('Destino de los fondos', $('fDestino').value),
+      cas('Mercado', 'INTERVENCIÓN'),
+    ].join('');
+    msg.className = '';
+    msg.innerHTML = `<span class="muted">Tasa operativa de intervención: ${escapeHtml(op.tasaTexto || '')} (${escapeHtml(op.origen || '')}, ${escapeHtml(op.edadTexto || '')}). El servidor revalidará la tasa al enviar.</span>`;
+  } else {
+    // Sin tasa: se muestra el estado, NO se bloquea. El bot puede encenderse igual.
+    $('compraResumen').innerHTML = [
+      cas('Monto en divisas', fmtNum(monto) + ' $'),
+      cas('Tasa (intervención)', 'NO DISPONIBLE TODAVÍA'),
+      cas('Subtotal', 'se calcula cuando el banco publique la tasa'),
+      cas('Origen (Bs)', ctaD),
+      cas('Destino (USD)', ctaU),
+      cas('Destino de los fondos', $('fDestino').value),
+      cas('Mercado', 'INTERVENCIÓN'),
+    ].join('');
+    msg.className = '';
+    msg.innerHTML = `<span class="muted">Intervención sin tasa todavía (${escapeHtml(op.motivo || 'no disponible')}). `
+      + `Puedes <b>encender el bot</b>: seguirá consultando y operará solo cuando el banco publique la tasa.</span>`;
   }
-  // COMPONENTES SEPARADOS. La comisión NO se calcula: sólo se muestra el porcentaje
-  // que entregó el banco (la base de cálculo no está verificada contractualmente).
-  const tasa = tasaUsar;
-  const esEXRI = true;
-  const etiquetaTasa = 'Tasa (intervención)';
-  const subtotal = monto * tasa;
-  const comPct = op.porcentajeComision != null ? op.porcentajeComision : null;
-  const cas = (label, val) => `<div class="casilla"><label>${label}</label><div class="v">${val}</div></div>`;
-  $('compraResumen').innerHTML = [
-    cas('Monto en divisas', fmtNum(monto) + ' $'),
-    cas(etiquetaTasa, (op.tasaTexto || fmtNum(tasa)) + ' Bs'),
-    cas('Subtotal (monto × tasa)', fmtNum(subtotal) + ' Bs'),
-    cas('Comisión', comPct != null ? `según banco (${fmtNum(comPct)} %)` : 'según banco'),
-    cas('Total', comPct != null ? `≈ ${fmtNum(subtotal)} Bs + comisión del banco` : fmtNum(subtotal) + ' Bs'),
-    cas('Origen (Bs)', ctaD),
-    cas('Destino (USD)', ctaU),
-    cas('Destino de los fondos', $('fDestino').value),
-    cas('Mercado', 'INTERVENCIÓN'),
-  ].join('');
-  msg.className = '';
-  msg.innerHTML = `<span class="muted">Tasa operativa de intervención: ${escapeHtml(op.tasaTexto || '')} (${escapeHtml(op.origen || '')}, ${escapeHtml(op.edadTexto || '')}). El servidor revalidará la tasa al enviar.</span>`;
   $('compraEjecutar').innerHTML = `
-    <div class="hint" style="margin-bottom:10px">Verifica los datos. <b>Confirmar y ejecutar compra</b> envía una orden ahora. <b>AUTORREENVÍO</b> es el bot: arranca el ciclo automático que consulta al banco, mantiene la tasa vigente y reintenta la compra en cada vuelta hasta que el banco acepte o lo detengas.</div>
+    <div class="hint" style="margin-bottom:10px">Verifica los datos. <b>Confirmar y ejecutar compra</b> envía una orden ahora (requiere tasa de intervención). <b>AUTORREENVÍO</b> es el bot: arranca el ciclo automático que monitoriza la intervención y compra en cuanto el banco publique la tasa. Puedes encenderlo aunque todavía no haya tasa.</div>
     <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap">
-      <button class="btn gold" id="btnEjecutarCompra" style="min-width:250px; text-align:center">✅ Confirmar y ejecutar compra</button>
+      <button class="btn gold" id="btnEjecutarCompra" style="min-width:250px; text-align:center"${sinTasa ? ' disabled title="Sin tasa de intervención todavía"' : ''}>✅ Confirmar y ejecutar compra</button>
       <button class="btn" id="btnAutoReenvio" style="min-width:215px; text-align:center">🔁 AUTORREENVÍO: OFF</button>
       <label class="muted" style="font-size:12px; display:flex; align-items:center; gap:8px">Intervalo
         <input id="autoDelay" type="range" min="0.1" max="5" step="0.1" value="0.5"
@@ -1123,9 +1141,9 @@ $('btnContinuar').onclick = async () => {
       });
       const d = await r.json();
       if (!d || !d.ok) throw new Error((d && d.error) || 'el servidor no inició el ciclo');
-      st.innerHTML = `🟢 <b>BOT TRABAJANDO</b> — consultando al banco cada ${delay.toFixed(1)} s…`;
+      st.innerHTML = `🟢 <b>BOT ENCENDIDO</b> — monitorizando la intervención cada ${delay.toFixed(1)} s…`;
       msg.className = '';
-      msg.innerHTML = '🟢 Bot activo. Consulta la tasa, la actualiza si cambia y reintenta la compra en cada ciclo. Puedes cerrar o recargar la página: el ciclo sigue.';
+      msg.innerHTML = '🟢 <b>BOT ENCENDIDO</b> — esperando intervención/datos necesarios. Consulta al banco en cada ciclo y operará solo cuando el banco publique la tasa. Puedes cerrar o recargar la página: el ciclo sigue.';
     } catch (e) {
       msg.className = 'err'; msg.innerHTML = '❌ ' + escapeHtml(e.message);
       st.innerHTML = '⏹️ No se pudo iniciar.';

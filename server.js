@@ -802,6 +802,27 @@ function sanitizarCfg(c) {
 function estadoPanel() {
   const ld = bot.webLoginData || {};
   const dd = ld.datos || {};
+  // TRES ESTADOS INDEPENDIENTES (no se condicionan entre sí):
+  //   A) botEncendido   → el ciclo está corriendo. NO requiere tasa ni intervención.
+  //   B) intervencionDisponible → el banco publicó la intervención con su tasa.
+  //   C) datosOperacion → están TODOS los datos que la operación necesita.
+  // La ausencia de B/C nunca apaga ni bloquea A.
+  const opA = getTasaOperativa();
+  const botEncendido = !!bot.running;
+  const intervencionDisponible = opA.disponible === true;
+  const datosOperacion = intervencionDisponible
+    && !!cfg.cuentaDebito && !!cfg.cuentaDestino
+    && (cfg.montoMaxUSD || 0) > 0;
+  const estados = {
+    botEncendido,
+    intervencionDisponible,
+    datosOperacion,
+    // Texto explícito para la UI: la falta de tasa es "esperando", no "bloqueado".
+    texto: !botEncendido ? 'BOT: APAGADO'
+      : !intervencionDisponible ? 'BOT: ENCENDIDO · INTERVENCIÓN: ESPERANDO · TASA: NO DISPONIBLE TODAVÍA'
+        : !datosOperacion ? 'BOT: ENCENDIDO · INTERVENCIÓN: DISPONIBLE · DATOS: INCOMPLETOS'
+          : 'BOT: ENCENDIDO · INTERVENCIÓN: DISPONIBLE · DATOS: LISTOS',
+  };
   return {
     bot: {
       running: !!bot.running, status: bot.status, lastCheck: bot.lastCheck, lastError: bot.lastError,
@@ -809,6 +830,7 @@ function estadoPanel() {
       saldoInsuficiente: !!bot.saldoInsuficiente, auctionOpen: !!bot.auctionOpen,
       compras: bot.compras || [], tasaFuente: bot.tasaFuente || null
     },
+    estados,
     tasas: {
       operativa: getTasaOperativa(),
       intervencion: vistaIntervencion(),
@@ -2108,7 +2130,7 @@ const server = http.createServer(async (req, res) => {
           const act = buscaAct(o.codigoActividadEconomica || cfg.codigoActividadEconomica) || buscaAct(o.actividadEconomica);
           const dest = buscaDest(o.destinoFondos || cfg.destinoFondos);
 
-          // --- TASA (misma prioridad que el bucle: EXRI manda; menudeo en vivo si EXRI cerrada) ---
+          // --- TASA: SOLO la de intervención (la APK no usa menudeo en este flujo) ---
           if (!tasas.intervencion.timestamp || edadMs(tasas.intervencion.timestamp) > FRESCURA_INTERVENCION_MS) {
             await actualizarIntervencion();
           }
