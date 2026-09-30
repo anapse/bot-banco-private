@@ -48,12 +48,40 @@ const LOGS_DIR = path.join(ROOT, 'logs'); // logs diarios: UN archivo por día
 /* ----------------------------- utilidades -------------------------------- */
 function nowIso() { return new Date().toISOString(); }
 
+// ---------------------------------------------------------------------------
+// RELOJ DE VENEZUELA (America/Caracas, UTC-4 sin horario de verano).
+// El bot opera con el Banco de Venezuela, así que la LÓGICA basada en hora local
+// (ventana de intervención, simulación, rotación del log por día) debe regirse por
+// la hora de Caracas, NO por la hora del reloj de la máquina (que puede ser otra).
+// Date.now()/toISOString() siguen siendo epoch absoluto (no cambian de zona).
+// ---------------------------------------------------------------------------
+function horaVen() {
+  // Devuelve { hh:mm } en hora de Caracas usando Intl (fiable en Node moderno).
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'America/Caracas', hour: '2-digit', minute: '2-digit', hour12: false,
+  }).formatToParts(new Date());
+  const hh = Number(parts.find(p => p.type === 'hour').value);
+  const mm = Number(parts.find(p => p.type === 'minute').value);
+  return { hh, mm };
+}
+function minutosVen() { const { hh, mm } = horaVen(); return hh * 60 + mm; }
+function diaVen() {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Caracas', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(new Date());
+  const y = parts.find(p => p.type === 'year').value;
+  const m = parts.find(p => p.type === 'month').value;
+  const d = parts.find(p => p.type === 'day').value;
+  return `${y}-${m}-${d}`;
+}
+
 // Ruta del log del día → logs/bot-YYYY-MM-DD.log
 // La fecha se calcula EN EL MOMENTO DE ESCRIBIR, así el cambio de día es automático:
 // el día 21 se escribe en bot-2026-09-21.log y al llegar el 22 se pasa a
 // bot-2026-09-22.log sin mezclar días ni tocar el archivo anterior.
+// La fecha es la de VENEZUELA (el banco opera en Caracas).
 function rutaLogDiario(fecha) {
-  const dia = String(fecha || nowIso()).slice(0, 10);
+  const dia = fecha || diaVen();
   return path.join(LOGS_DIR, `bot-${dia}.log`);
 }
 
@@ -851,8 +879,7 @@ const ENDPOINTS = {
 
 /* ------------------------------- SIM engine -------------------------------- */
 function withinWindow() {
-  const d = new Date();
-  const now = d.getHours() * 60 + d.getMinutes();
+  const now = minutosVen();   // hora de Caracas (no la del reloj de la máquina)
   const [hi, mi] = cfg.ventanaInicio.split(':').map(Number);
   const [hf, mf] = cfg.ventanaFin.split(':').map(Number);
   return now >= hi * 60 + mi && now <= hf * 60 + mf;
@@ -862,14 +889,14 @@ function withinWindow() {
 // [SOLO MODO SIM] Generador de intervenciones/tasas simuladas. No toca el banco y
 // NO participa en el flujo real (el modo real nunca lee estas tasas).
 function simAuctionState() {
-  const d = new Date();
-  const min = d.getHours() * 60 + d.getMinutes();
+  const { hh, mm } = horaVen();      // hora de Caracas
+  const min = hh * 60 + mm;
   const [hi, mi] = cfg.ventanaInicio.split(':').map(Number);
   const [hf, mf] = cfg.ventanaFin.split(':').map(Number);
   const open = min >= hi * 60 + mi && min <= hf * 60 + mf;
   const seed = bot.simSeed; // seed estable por arranque (bot.simSeed, no cfg)
   // pulso: cada minuto hay 25% de estar "en intervención" si está dentro de la ventana
-  const pulse = ((seed + d.getHours() * 37 + d.getMinutes() * 13) % 4) === 0;
+  const pulse = ((seed + hh * 37 + mm * 13) % 4) === 0;
   const inAuction = open && pulse;
   const tasa = 35.8 + ((seed + min) % 9) / 2 + Math.sin(min / 5) * 0.4; // ~35.8–40.2
   // próxima intervención simulada: en algún minuto futuro de la ventana

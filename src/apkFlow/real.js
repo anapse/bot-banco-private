@@ -27,7 +27,7 @@ const L = '='.repeat(68);
 
 const INTERVALO_MS = Math.max(500, parseInt(process.env.APK_INTERVAL_MS || '2000', 10));
 
-const hora = () => new Date().toLocaleTimeString('es-VE', { hour12: false });
+const hora = () => new Intl.DateTimeFormat('es-VE', { timeZone: 'America/Caracas', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(new Date());
 
 function cfg() {
   try { return JSON.parse(fs.readFileSync(path.join(ROOT, 'config.json'), 'utf8')); }

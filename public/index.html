@@ -485,6 +485,13 @@
 const $ = id => document.getElementById(id);
 let state = null;
 
+// Hora de VENEZUELA (America/Caracas, UTC-4 sin DST): el bot opera con el BDV,
+// así que todas las marcas de hora visibles usan la zona del banco, no la del
+// navegador (que puede estar en otra ciudad/país).
+const horaVe = (iso) => (iso
+  ? new Date(iso).toLocaleTimeString('es-VE', { timeZone: 'America/Caracas', hour12: false })
+  : new Date().toLocaleTimeString('es-VE', { timeZone: 'America/Caracas', hour12: false }));
+
 /* ---------- tabs (navbar siempre visible) ---------- */
 document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
   document.querySelectorAll('nav button').forEach(x => x.classList.remove('active'));
@@ -524,7 +531,7 @@ async function refresh() {
       const me = $('mMEstado');
       me.textContent = mn.estadoPolitica === 'A' ? 'ACTIVO ✅' : (mn.estadoPolitica || '—');
       me.style.color = mn.estadoPolitica === 'A' ? 'var(--ok)' : 'var(--muted)';
-      $('mMTs').textContent = mn.timestamp ? ('consultado ' + new Date(mn.timestamp).toLocaleTimeString()) : '';
+      $('mMTs').textContent = mn.timestamp ? ('consultado ' + horaVe(mn.timestamp)) : '';
       $('mMInfo').textContent = `Comisión ${mn.porcentajeComision || '—'}% · máx ${mn.montoMaximo || '—'} $ · horario ${mn.horaMinimo || '—'}–${mn.horaMaximo || '—'} · turno ${mn.numeroTurno || '—'}`;
       const dv = mn.divisas || {};
       $('mMDivisas').textContent = 'Estado por divisa (según el banco): '
@@ -551,7 +558,7 @@ async function refresh() {
       + (iv.regla ? ` · ${iv.regla}` : '');
     $('mCupo').textContent = iv.cupoPersNaturales != null ? fmtNum(iv.cupoPersNaturales) + ' $' : '—';
     $('mComision').textContent = iv.porcentajeComision != null ? fmtNum(iv.porcentajeComision) + ' %' : '—';
-    $('mTsInt').textContent = iv.timestamp ? new Date(iv.timestamp).toLocaleTimeString() : '—';
+    $('mTsInt').textContent = iv.timestamp ? horaVe(iv.timestamp) : '—';
     $('mFuenteInt').textContent = 'Fuente: intervención · ' + (iv.endpoint || '/altaintervencioncambiaria/consultarReglasEXRI')
       + (iv.ageMs != null ? ` · ${iv.edadTexto || ''}` : '')
       + (iv.deEstaSesion === false ? ' · ⚠️ dato de una sesión anterior' : '');
@@ -579,7 +586,7 @@ async function refresh() {
     const sal = state.saldo;
     if (sal && sal.disponible != null) {
       $('pSaldoWeb').textContent = fmtNum(sal.disponible) + ' Bs';
-      $('saldoMsg').textContent = 'Actualizado: ' + new Date().toLocaleTimeString();
+      $('saldoMsg').textContent = 'Actualizado: ' + horaVe();
     } else if (sal && sal.mensaje) {
       $('saldoMsg').textContent = '⚠️ ' + sal.mensaje + ' (el servicio del banco puede estar en mantenimiento — reintentando)';
     }
@@ -792,7 +799,7 @@ async function loadCuentaSaldo(force) {
     const ds = await rs.json();
     if (ds.ok && ds.saldo && ds.saldo.data && ds.saldo.data.saldoDisponible != null) {
       $('pSaldoWeb').textContent = fmtNum(ds.saldo.data.saldoDisponible) + ' Bs';
-      $('saldoMsg').textContent = 'Actualizado: ' + new Date().toLocaleTimeString();
+      $('saldoMsg').textContent = 'Actualizado: ' + horaVe();
     } else if (ds.ok && ds.saldo && ds.saldo.message) {
       $('saldoMsg').textContent = '⚠️ ' + ds.saldo.message + ' — reintentando cada 2 min';
     } else {
@@ -949,7 +956,7 @@ function syncBotonAuto(b) {
     st.innerHTML = `🟢 <b>BOT ENCENDIDO</b> — intento <b>#${b.rechazos || 0}</b> · chequeos ${b.checks || 0}`
       + lineaEstados
       + (b.saldoInsuficiente ? ' · <span style="color:var(--gold)">⚠️ sin fondos</span>' : '')
-      + (b.lastCheck ? `<br><span class="muted">Última consulta al banco: ${new Date(b.lastCheck).toLocaleTimeString()}</span>` : '')
+      + (b.lastCheck ? `<br><span class="muted">Última consulta al banco: ${horaVe(b.lastCheck)}</span>` : '')
       + (uc ? `<br><span class="muted">Última compra: ${uc.montoUSD} USD @ ${uc.tasa} Bs · ref ${uc.referencia}</span>` : '');
   } else if (!st.dataset.mensajeManual) {
     st.innerHTML = '⏹️ Detenido. Pulsa AUTORREENVÍO para que el bot empiece a consultar y comprar automáticamente.';
@@ -1444,7 +1451,7 @@ async function apkEstado() {
       </div>
       <div class="hint" style="margin-top:10px">
         canal: <b>APK</b> · ${escapeHtml(d.base || '')}<br>
-        http ${d.httpStatus ?? '—'} · ${d.ms ?? '—'} ms · ${d.ts ? new Date(d.ts).toLocaleTimeString() : ''}
+        http ${d.httpStatus ?? '—'} · ${d.ms ?? '—'} ms · ${d.ts ? horaVe(d.ts) : ''}
         ${d.waf ? '<br><b style="color:#a04040">bloqueado por el WAF del banco</b>' : ''}
       </div>`;
     // Refresca el panel de compra con el estado

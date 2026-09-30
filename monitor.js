@@ -47,9 +47,15 @@ const BACKOFF_MAX_MS = 60000;
 
 // ---------------------------- utilidades -----------------------------------
 function nowIso() { return new Date().toISOString(); }
-const hora = () => new Date().toLocaleTimeString('es-VE', { hour12: false });
+// Hora y fecha de VENEZUELA (America/Caracas, UTC-4 sin DST): el banco opera allí.
+const horaVen = () => new Intl.DateTimeFormat('es-VE', { timeZone: 'America/Caracas', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(new Date());
+const diaVen = () => {
+  const p = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Caracas', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date());
+  return `${p.find(x=>x.type==='year').value}-${p.find(x=>x.type==='month').value}-${p.find(x=>x.type==='day').value}`;
+};
+const hora = () => horaVen();
 
-const RUTA_LOG = () => path.join(LOGS_DIR, `bot-${nowIso().slice(0, 10)}.log`);
+const RUTA_LOG = () => path.join(LOGS_DIR, `bot-${diaVen()}.log`);
 
 // Credenciales: nunca en claro en el log
 const SENSIBLE = /password|clave|secret|token|authorization|cookie|huella|app-?key/i;
