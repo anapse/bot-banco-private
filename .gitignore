@@ -1,0 +1,45 @@
+# Dependencias
+node_modules/
+
+# Variables y secretos
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+logs/
+log/
+debug/
+temp/
+
+# Credenciales
+credentials/
+secrets/
+tokens/
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Sesiones
+sessions/
+session/
+cookies/
+*.cookie
+
+# Builds
+dist/
+build/
+
+# Sistema
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Archivos temporales
+*.tmp
+*.temp

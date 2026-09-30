@@ -1,0 +1,20 @@
+{
+  "mode": "real",
+  "cedula": "V-26870048",
+  "montoMaxUSD": 10,
+  "tasaMax": 0,
+  "ventanaInicio": "00:00",
+  "ventanaFin": "23:59",
+  "intervaloMs": 500,
+  "notificarWeb": true,
+  "telegram": {
+    "botToken": "",
+    "chatId": ""
+  },
+  "autoRenew": true,
+  "cuentaDebito": "01020414330000654951",
+  "cuentaDestino": "01020414370001045242",
+  "codigoActividadEconomica": "22",
+  "destinoFondos": "11",
+  "descOcupacion": "No aplica (Únicamente para clientes Personas Naturales)"
+}

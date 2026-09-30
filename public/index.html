@@ -1,0 +1,1480 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BDV Bot Web — Compra de Divisas</title>
+<style>
+  :root {
+    --bg: #0b1020; --bg2: #111a30; --card: #16213a; --card2: #1c2a47;
+    --border: #26365c; --text: #e8edf7; --muted: #8fa1c4;
+    --accent: #2f7cf6; --accent2: #1e5fd0; --gold: #f5b83d; --ok: #2fd47a; --err: #ff5d6c;
+    --radius: 14px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; min-height: 100vh; }
+  .bg-glow { position: fixed; inset: 0; pointer-events: none; z-index: 0;
+    background: radial-gradient(600px 300px at 80% -10%, rgba(47,124,246,.22), transparent 60%),
+                radial-gradient(500px 300px at 10% 110%, rgba(245,184,61,.10), transparent 60%); }
+
+  /* ---------- barra superior (header + nav) SIEMPRE VISIBLE ---------- */
+  .topbar { position: sticky; top: 0; z-index: 20; background: rgba(11,16,32,.92); backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--border); }
+  header { display: flex; align-items: center; gap: 12px; padding: 10px 18px; flex-wrap: wrap; }
+  .logo { width: 38px; height: 38px; border-radius: 11px; display: grid; place-items: center;
+    background: linear-gradient(135deg, var(--accent), var(--accent2)); font-size: 19px; flex-shrink: 0; }
+  .brand { line-height: 1.1; min-width: 0; }
+  .brand b { font-size: 15px; letter-spacing: .3px; white-space: nowrap; }
+  .brand small { color: var(--muted); font-size: 10.5px; }
+  .spacer { flex: 1; }
+  .ses-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+  .ses-dot.on { background: var(--ok); box-shadow: 0 0 8px var(--ok); }
+  .ses-dot.off { background: var(--muted); }
+  .ses-user { font-size: 12.5px; font-weight: 700; white-space: nowrap; }
+  .ses-timer { font-family: Consolas, monospace; font-size: 15px; font-weight: 700; color: var(--ok); white-space: nowrap; }
+  .renew-badge { display: inline-flex; align-items: center; gap: 5px; font-size: 9.5px; font-weight: 800; letter-spacing: .5px;
+    padding: 3px 9px; border-radius: 999px; border: 1px solid; white-space: nowrap; }
+  .renew-badge.on { color: var(--ok); border-color: rgba(47,212,122,.45); background: rgba(47,212,122,.1); }
+  .renew-badge.on::before { content:''; width: 6px; height: 6px; border-radius: 50%; background: var(--ok); animation: pulse 1.6s infinite; }
+  .renew-badge.off { color: var(--muted); border-color: var(--border); background: transparent; }
+  .ses-actions { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+  .link-btn { background: transparent; border: 1px solid var(--border); color: var(--muted); font-size: 11px;
+    font-weight: 600; padding: 4px 10px; border-radius: 999px; cursor: pointer; white-space: nowrap; }
+  .link-btn:hover { color: var(--err); border-color: rgba(255,93,108,.5); }
+
+  /* ---------- tasa compacta ---------- */
+  .tasa-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; }
+  .tasa-grid .lbl { margin-top: 0; }
+  .tasa-grid .val { font-size: 14px; margin-top: 1px; }
+
+  /* ---------- lista de cambios ---------- */
+  .cambio { display: flex; gap: 10px; align-items: baseline; padding: 7px 4px; border-bottom: 1px solid rgba(38,54,92,.35);
+    font-size: 12.5px; line-height: 1.5; }
+  .cambio:last-child { border-bottom: none; }
+  .cambio .t { color: var(--muted); font-family: Consolas, monospace; font-size: 11px; white-space: nowrap; }
+  .cambio .m { color: var(--text); }
+  .cambio .m b { color: var(--gold); }
+
+  /* ---------- recursos ---------- */
+  .ep-list { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .ep { display: flex; gap: 8px; align-items: center; padding: 9px 11px; border: 1px solid var(--border);
+    border-radius: 10px; font-size: 12px; background: var(--bg2); transition: .15s; flex-wrap: wrap; }
+  .ep:hover { border-color: var(--accent); background: var(--card2); }
+  .ep code { font-family: Consolas, monospace; font-size: 11px; background: var(--bg2); padding: 3px 7px; border-radius: 6px; color: #c9dcff; word-break: break-all; }
+  .ep .m { width: 44px; text-align: center; font-weight: 800; font-size: 10px; border-radius: 6px; padding: 3px 0; flex-shrink: 0; }
+  .m.get { background: rgba(47,124,246,.15); color: #7fb0ff; }
+  .m.post { background: rgba(47,212,122,.12); color: var(--ok); }
+  .ep .u { color: var(--muted); font-size: 10.5px; width: 100%; }
+  .ep .st { margin-left: auto; font-size: 10px; font-weight: 700; white-space: nowrap; }
+  .st.done { color: var(--ok); } .st.pend { color: var(--gold); } .st.app { color: #7fb0ff; }
+  @media (max-width: 720px) { .ep-list { grid-template-columns: 1fr; } }
+
+  nav { display: flex; gap: 4px; padding: 6px 14px 8px; overflow-x: auto; scrollbar-width: none; }
+  nav::-webkit-scrollbar { display: none; }
+  nav button { background: transparent; border: none; color: var(--muted); font-size: 13px; font-weight: 600;
+    padding: 9px 14px; cursor: pointer; border-radius: 10px; white-space: nowrap; transition: .15s; flex-shrink: 0; }
+  nav button:hover { color: var(--text); background: var(--bg2); }
+  nav button.active { color: var(--text); background: var(--card2); box-shadow: inset 0 0 0 1px var(--accent); }
+
+  /* ---------- layout ---------- */
+  main { position: relative; z-index: 2; padding: 16px 16px 60px; max-width: 1100px; margin: 0 auto; }
+  .tab { display: none; }
+  .tab.active { display: block; animation: fade .25s; }
+  @keyframes fade { from { opacity: 0; transform: translateY(6px); } }
+
+  .grid { display: grid; gap: 14px; }
+  .g2 { grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
+  .g3 { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 14px; }
+  .card h3 { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .8px; margin-bottom: 12px; }
+  .big { font-size: 28px; font-weight: 800; letter-spacing: .5px; }
+  .big small { font-size: 12px; color: var(--muted); font-weight: 600; margin-left: 6px; }
+  .lbl { font-size: 10.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .7px; margin-top: 9px; }
+  .val { font-size: 14.5px; font-weight: 600; margin-top: 2px; }
+  .muted { color: var(--muted); }
+  .kpi { display: flex; justify-content: space-between; align-items: baseline; }
+
+  /* ---------- botones ---------- */
+  .btn { border: none; cursor: pointer; font-weight: 700; font-size: 13.5px; border-radius: 10px;
+    padding: 11px 20px; color: #fff; background: linear-gradient(135deg, var(--accent), var(--accent2));
+    transition: .15s; display: inline-flex; align-items: center; gap: 8px; }
+  .btn:hover { filter: brightness(1.12); transform: translateY(-1px); }
+  .btn:disabled { opacity: .45; cursor: not-allowed; transform: none; }
+  .btn.danger { background: linear-gradient(135deg, #ff5d6c, #c23645); }
+  .btn.ghost { background: var(--card2); border: 1px solid var(--border); color: var(--text); }
+  .btn.gold { background: linear-gradient(135deg, var(--gold), #d99a1e); color: #231a02; }
+
+  /* ---------- form ---------- */
+  .field { margin-bottom: 13px; }
+  .field label { display: block; font-size: 11.5px; color: var(--muted); margin-bottom: 6px; font-weight: 600; }
+  .field input, .field select { width: 100%; background: var(--bg2); border: 1px solid var(--border); color: var(--text);
+    border-radius: 9px; padding: 10px 12px; font-size: 13.5px; outline: none; transition: .15s; }
+  .field input:focus, .field select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(47,124,246,.15); }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .hint { font-size: 11px; color: var(--muted); margin-top: 5px; line-height: 1.45; }
+  .chk { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text); font-weight: 600;
+    background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; padding: 11px 12px; cursor: pointer; margin-bottom: 12px; }
+  .chk input { width: auto; }
+
+  /* ---------- tabla ---------- */
+  .tbl-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; min-width: 480px; }
+  th { text-align: left; color: var(--muted); font-size: 10.5px; text-transform: uppercase; letter-spacing: .7px; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+  td { padding: 9px 10px; border-bottom: 1px solid rgba(38,54,92,.5); }
+  tr:hover td { background: rgba(47,124,246,.05); }
+  .ref { font-family: Consolas, monospace; font-size: 11.5px; color: var(--gold); }
+  .ok { color: var(--ok); } .err { color: var(--err); }
+
+  /* ---------- logs ---------- */
+  #logs { background: #070b16; border: 1px solid var(--border); border-radius: 10px; padding: 12px;
+    font-family: Consolas, 'Cascadia Mono', monospace; font-size: 12px; height: 60vh; min-height: 280px; overflow-y: auto; line-height: 1.7; }
+  #logs .t { color: var(--muted); } #logs .i { color: #9db6e8; } #logs .w { color: var(--gold); } #logs .e { color: var(--err); font-weight: 700; }
+
+  /* ---------- endpoints (duplicado eliminado) ---------- */
+
+  .toast-wrap { position: fixed; top: 84px; right: 14px; z-index: 50; display: flex; flex-direction: column; gap: 8px; }
+  .toast { background: var(--card2); border: 1px solid var(--accent); border-left: 4px solid var(--accent);
+    border-radius: 10px; padding: 11px 14px; min-width: 240px; max-width: 90vw; box-shadow: 0 10px 30px rgba(0,0,0,.5); animation: slide .3s; }
+  .toast b { font-size: 12.5px; } .toast p { font-size: 12px; color: var(--muted); margin-top: 3px; }
+  @keyframes slide { from { opacity: 0; transform: translateX(30px); } }
+
+  .disclaimer { margin-top: 20px; padding: 12px 16px; border-radius: 10px; font-size: 11.5px; line-height: 1.6;
+    background: rgba(245,184,61,.06); border: 1px solid rgba(245,184,61,.25); color: #e6cfa0; }
+
+  /* ---------- casillas (datos cliente) ---------- */
+  .casillas { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; }
+  .casilla { background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; padding: 9px 12px; }
+  .casilla label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .7px; display: block; margin-bottom: 3px; }
+  .casilla .v { font-size: 13.5px; font-weight: 600; word-break: break-word; }
+  .casilla .v.mono { font-family: Consolas, monospace; font-size: 12.5px; }
+
+  /* ---------- login overlay ---------- */
+  #loginOverlay { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center;
+    background: radial-gradient(700px 400px at 70% -10%, rgba(47,124,246,.25), transparent 60%),
+                radial-gradient(600px 400px at 20% 110%, rgba(245,184,61,.12), transparent 60%), #0b1020; }
+  .login-card { width: 400px; max-width: calc(100vw - 40px); background: var(--card); border: 1px solid var(--border);
+    border-radius: 18px; padding: 30px 28px; box-shadow: 0 30px 80px rgba(0,0,0,.55); }
+  .login-logo { width: 54px; height: 54px; border-radius: 16px; display: grid; place-items: center; font-size: 25px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2)); margin-bottom: 14px; }
+  .login-card h2 { font-size: 19px; margin-bottom: 4px; }
+  .login-sub { color: var(--muted); font-size: 12.5px; line-height: 1.5; margin-bottom: 20px; }
+  .remember { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); margin-bottom: 14px; cursor: pointer; }
+  .remember input { width: auto; }
+  .login-note { margin-top: 14px; font-size: 11px; color: var(--muted); line-height: 1.5; text-align: center; }
+  #loginMsg { margin-top: 12px; font-size: 12.5px; line-height: 1.55; min-height: 18px; }
+  #loginMsg.ok { color: var(--ok); } #loginMsg.err { color: var(--err); }
+
+  /* ---------- móvil ---------- */
+  @media (max-width: 640px) {
+    header { padding: 8px 12px; gap: 8px; }
+    .brand b { font-size: 13px; }
+    .ses-timer { font-size: 13px; }
+    .renew-badge { font-size: 8.5px; padding: 2px 7px; }
+    nav { padding: 4px 8px 6px; }
+    nav button { padding: 8px 11px; font-size: 12px; }
+    main { padding: 12px 10px 50px; }
+    .card { padding: 13px; }
+    .big { font-size: 24px; }
+    .row2 { grid-template-columns: 1fr; }
+    .btn { padding: 10px 16px; font-size: 13px; }
+  }
+</style>
+</head>
+<body>
+<div class="bg-glow"></div>
+
+<div class="topbar">
+  <header>
+    <div class="logo">🤖</div>
+    <div class="brand"><b>BDV Bot Web</b><br><small>Compra de divisas · bdvenlinea</small></div>
+    <div class="spacer"></div>
+    <span class="ses-dot off" id="sesDot"></span>
+    <span class="ses-user muted" id="sesUser">sin sesión</span>
+    <span class="ses-timer" id="sesTimer">⏳ —</span>
+    <span class="ses-actions">
+      <span class="renew-badge off" id="sesRenew">AUTO REFRESH</span>
+      <button class="link-btn" id="btnLogout" style="display:none">Cerrar sesión</button>
+    </span>
+  </header>
+  <nav>
+    <button data-tab="panel">📊 Panel</button>
+    <button data-tab="movimientos">💳 Movimientos</button>
+    <button data-tab="apk">🔧 Diagnóstico</button>
+    <button data-tab="intervencion">💱 Intervención</button>
+    <button data-tab="config">⚙️ Configuración</button>
+    <button data-tab="log">📜 Log</button>
+    <button data-tab="api">🔌 Recursos</button>
+  </nav>
+</div>
+
+<main>
+  <!-- ============ DIAGNÓSTICO ============ -->
+  <!--
+    OJO: la COMPRA se hace desde el formulario de siempre (pestaña
+    Intervención). Esta pestaña es SOLO para diagnóstico: consultar el
+    estado por el canal del APK y ver respuestas crudas.
+    NO duplica el formulario.
+  -->
+  <section class="tab" id="tab-apk">
+    <div class="card" style="border-left:5px solid #f0a020">
+      <h3>🔧 Diagnóstico — canal del APK</h3>
+      <div class="hint" style="margin-bottom:10px">
+        <b>La compra se hace en la pestaña 💱 Intervención</b>, con el formulario de siempre.
+        Esta pestaña sirve para <b>diagnosticar</b>: ver el código real del banco
+        (<code>1000</code> abierto · <code>1003</code> sin cupo) y las respuestas crudas.
+        <br><br>
+        El portal (bdvenlinea) responde siempre <code>code=01</code> y nunca refleja si la
+        subasta está abierta. El APK usa otra API (<code>bdvdigital.banvenez.com</code>)
+        que sí lo refleja — y es la que usa ahora el motor del bot.
+      </div>
+      <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px">
+        <button class="btn" id="btnApkEstado">🔄 Consultar estado</button>
+        <button class="btn" id="btnApkActividades">📋 Actividades</button>
+        <button class="btn" id="btnApkReglas">📜 Reglas</button>
+        <button class="btn" id="btnApkOficinas">🏢 Oficinas</button>
+      </div>
+      <div id="apkEstadoBox" style="font-size:13px; line-height:1.6"></div>
+    </div>
+
+    <div class="card">
+      <h3>🔎 Llamada cruda al banco</h3>
+      <div class="hint" style="margin-bottom:8px">
+        Llama a cualquier endpoint del APK. Todo va por <b>POST</b> (el WAF bloquea GET).
+      </div>
+      <div class="field">
+        <label for="apkRawUrl">Endpoint</label>
+        <input id="apkRawUrl" type="text" value="https://bdvdigital.banvenez.com/bdvx-operaciones-cambiarias/v1/operaciones/consultar/reglas/compra" />
+      </div>
+      <div class="field" style="margin-top:8px">
+        <label for="apkRawBody">Payload (JSON)</label>
+        <input id="apkRawBody" type="text" value="{}" />
+      </div>
+      <button class="btn" id="btnApkRaw" style="margin-top:10px">Enviar</button>
+      <div id="apkRawBox" style="margin-top:12px"></div>
+    </div>
+  </section>
+
+  <!-- ============ PANEL ============ -->
+  <section class="tab active" id="tab-panel">
+    <div class="card saldo-card" style="background:linear-gradient(135deg,#16418f,#0e2a63); border:none; margin-bottom:14px">
+      <h3 style="color:#a8c6ff">🏦 CUENTA CORRIENTE · SALDO DISPONIBLE</h3>
+      <div class="big" id="pSaldoWeb" style="color:#fff">Bs. —</div>
+      <div class="lbl" style="color:#8fb0e8">Cuenta</div>
+      <div class="val mono" id="pCuentaWeb" style="color:#e8f0ff; font-family:Consolas,monospace">—</div>
+      <div id="saldoMsg" style="margin-top:8px; font-size:11.5px; color:#b9cdf5; line-height:1.5"></div>
+    </div>
+    <div class="card">
+      <h3>👤 Datos del cliente — sesión real (bdvenlinea)</h3>
+      <div class="casillas" id="casillas">—</div>
+    </div>
+  </section>
+
+  <!-- ============ MOVIMIENTOS (carga automática) ============ -->
+  <section class="tab" id="tab-movimientos">
+    <div class="card">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:8px">
+        <h3 style="margin:0">💳 Historial de operaciones (real)</h3>
+        <button class="btn ghost" id="btnMov">🔄 Actualizar</button>
+      </div>
+      <div id="movMsg" class="muted" style="font-size:12.5px; margin-bottom:10px; min-height:18px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis">Cargando…</div>
+      <div id="movList"></div>
+    </div>
+  </section>
+
+  <!-- ============ INTERVENCIÓN ============ -->
+  <section class="tab" id="tab-intervencion">
+    <div class="card">
+      <div class="kpi" style="margin-bottom:10px">
+        <h3 style="margin:0">💱 INTERVENCIÓN — tasa de operación</h3>
+        <button class="btn ghost" id="btnTasa" style="padding:6px 12px; font-size:12px">🔄 Actualizar</button>
+      </div>
+      <div class="casillas">
+        <div class="casilla"><label>Tasa de intervención</label><div class="v" id="mTasaInt" style="font-weight:800">—</div></div>
+        <div class="casilla"><label>Disponibilidad</label><div class="v" id="mDispInt">—</div></div>
+        <div class="casilla"><label>Estado (código del banco)</label><div class="v" id="mEstadoInt">—</div></div>
+        <div class="casilla"><label>Cupo personas naturales</label><div class="v" id="mCupo">—</div></div>
+        <div class="casilla"><label>Comisión (según banco)</label><div class="v" id="mComision">—</div></div>
+        <div class="casilla"><label>Consultada</label><div class="v mono" id="mTsInt" style="font-size:12px">—</div></div>
+      </div>
+
+      <!-- INDICADOR DE INTENTO: distingue TASA PUBLICADA de INTERVENCIÓN ABIERTA.
+           Sólo informa si se puede empezar a intentar; NO abre ni habilita la compra. -->
+      <div id="indicadorIntento" style="margin-top:12px; padding:12px 14px; border-radius:10px;
+           border:1px solid var(--warn,#b8860b); background:rgba(184,134,11,.10); display:none">
+        <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap">
+          <span id="indIcono" style="font-size:20px">🎯</span>
+          <span id="indTitulo" style="font-weight:800; letter-spacing:.3px">—</span>
+          <span id="indBadge" style="margin-left:auto; padding:3px 10px; border-radius:999px;
+                font-size:11px; font-weight:800; border:1px solid currentColor">—</span>
+        </div>
+        <div id="indDetalle" class="hint" style="margin-top:8px; line-height:1.5"></div>
+      </div>
+
+      <div class="hint" id="mFuenteInt" style="margin-top:10px">Fuente: —</div>
+      <div class="hint" id="mMotivoInt" style="margin-top:4px"></div>
+    </div>
+    <div class="card">
+      <h3>🛒 Compra de divisas — formulario (como la app)</h3>
+      <div class="row2">
+        <div class="field"><label>Cuenta a debitar (Bs)</label>
+          <select id="fCtaDebito"><option value="">— cargando… —</option></select></div>
+        <div class="field"><label>Cuenta destino (USD)</label>
+          <select id="fCtaDestino"><option value="">— cargando… —</option></select></div>
+      </div>
+      <div class="row2">
+        <div class="field"><label>Tasa de la operación (intervención)</label>
+          <input id="fTasa" readonly style="color:var(--ok); font-weight:700">
+          <div class="hint" id="fTasaFuente" style="margin-top:4px"></div>
+          <div class="hint" id="fTasaEstado" style="margin-top:2px"></div></div>
+        <div class="field"><label>Monto a comprar (USD)</label>
+          <input id="fMonto" type="number" min="1" step="0.01" value="10" placeholder="10,00">
+          <div class="hint" id="fMontoHint">Cupo según el banco (disponible cuando la intervención está abierta)</div></div>
+      </div>
+      <div class="row2">
+        <div class="field"><label>Destino de los fondos</label>
+          <!-- El value es el CÓDIGO del banco; el texto se muestra.
+               PREDETERMINADO: 11 = Otros (lo elegido por el usuario).
+               Se rellena desde /api/web-combo conservando la selección guardada. -->
+          <select id="fDestino">
+            <option value="01">Materia prima</option><option value="02">Sueldos y Salarios</option>
+            <option value="03">Pagos de proveedores</option><option value="04">Cancelación de préstamos</option>
+            <option value="05">Ahorro</option>
+            <option value="06">Inventario</option><option value="07">Pago de Servicios</option><option value="08">Honorarios Profesionales</option>
+            <option value="09">Capital de trabajo</option>
+            <option value="10">Mobiliario y equipos</option><option value="11" selected>Otros</option>
+          </select></div>
+        <div class="field"><label>Actividad económica</label>
+          <!-- El value es el CÓDIGO del banco (id); el texto es lo que se muestra.
+               PREDETERMINADO: 22 = No aplica (Personas Naturales).
+               Se rellena desde /api/web-combo conservando la selección guardada. -->
+          <select id="fActividad"><option value="22" selected>No aplica (Únicamente para clientes Personas Naturales)</option></select></div>
+      </div>
+      <div style="display:flex; gap:10px; margin-top:6px; flex-wrap:wrap">
+        <button class="btn" id="btnContinuar">▶ Continuar</button>
+        <button class="btn ghost" id="btnLimpiar">🧹 Limpiar</button>
+      </div>
+      <div id="compraMsg" style="margin-top:12px; font-size:12.5px; line-height:1.5; min-height:42px; overflow:hidden;
+        display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical"></div>
+    </div>
+
+    <div class="card" id="compraResumenCard" style="display:none">
+      <h3>📄 Resumen de la operación</h3>
+      <div class="casillas" id="compraResumen"></div>
+      <div id="compraEjecutar" style="margin-top:12px"></div>
+    </div>
+
+    <div class="card">
+      <h3>📊 MENUDEO — referencia informativa <span class="muted" style="text-transform:none; letter-spacing:0; font-size:10px">— NO es la tasa de intervención y NO alimenta la operación</span></h3>
+      <div class="kpi" style="margin-bottom:8px">
+        <span id="mMEstado" style="font-weight:700;font-size:12px">—</span>
+        <span class="muted mono" id="mMTs" style="font-size:11px">—</span>
+      </div>
+      <div class="tasa-grid">
+        <div><div class="lbl">Compra USD (banco compra)</div><div class="val ok" id="mMCompraUSD">—</div></div>
+        <div><div class="lbl">Venta USD (banco vende)</div><div class="val" id="mMVentaUSD">—</div></div>
+        <div><div class="lbl">Compra EUR</div><div class="val ok" id="mMCompraEUR">—</div></div>
+        <div><div class="lbl">Venta EUR</div><div class="val" id="mMVentaEUR">—</div></div>
+      </div>
+      <div class="muted" id="mMInfo" style="font-size:11px; margin-top:8px">—</div>
+      <div class="muted" id="mMDivisas" style="font-size:11px; margin-top:4px">—</div>
+    </div>
+  </section>
+
+  <!-- ============ CONFIGURACIÓN ============ -->
+  <section class="tab" id="tab-config">
+    <div class="grid g2">
+      <div class="card">
+        <h3>🔑 Datos de logueo (bdvenlinea)</h3>
+        <div class="field"><label>Cédula / usuario</label><input id="cUser" placeholder="KARELYS2812" autocomplete="username"></div>
+        <div class="field"><label>Clave</label>
+          <div style="display:flex; gap:8px">
+            <input id="cPass" type="password" placeholder="••••••••" autocomplete="current-password" style="flex:1">
+            <button type="button" id="btnShowPass2" style="background:var(--bg2); border:1px solid var(--border); color:var(--muted); border-radius:9px; padding:0 13px; cursor:pointer; font-size:14px">👁</button>
+          </div>
+        </div>
+        <button class="btn gold" id="btnLoginCfg" style="width:100%; justify-content:center">💾 Guardar e iniciar sesión</button>
+        <div class="hint" style="margin-top:8px">Guarda las credenciales en <code>.env</code> e inicia sesión. Con sesión guardada, el bot se loguea solo al abrir.</div>
+        <div id="loginCfgMsg" style="margin-top:10px; font-size:12.5px; line-height:1.5"></div>
+      </div>
+      <div class="card">
+        <h3>⚙️ Reglas del bot</h3>
+        <div class="row2">
+          <div class="field"><label>Monto máx por operación (USD)</label><input id="cMonto" type="number" min="1"></div>
+          <div class="field"><label>Intervalo de envío de órdenes (seg)</label>
+            <div style="display:flex; align-items:center; gap:10px">
+              <input id="cInt" type="range" min="0.1" max="5" step="0.1" style="flex:1; accent-color:var(--accent); cursor:pointer">
+              <span id="cIntVal" style="min-width:44px; font-weight:700">1,0 s</span>
+            </div>
+            <div class="hint">0,1 s a 5,0 s. Recomendado: 0,5–1 s (miles de personas y bots compitiendo).</div></div>
+        </div>
+        <div class="row2">
+          <div class="field"><label>Ventana desde</label><input id="cDesde" type="time"></div>
+          <div class="field"><label>Ventana hasta</label><input id="cHasta" type="time"></div>
+        </div>
+        <div class="hint" style="margin-top:-6px; margin-bottom:12px">Solo afecta al modo simulación — en modo real el banco decide cuándo está abierta la venta de divisas.</div>
+        <label class="chk"><input type="checkbox" id="cNotif"> Notificaciones en pantalla</label>
+        <label class="chk"><input type="checkbox" id="cAutoRenew"> 🔄 Mantener sesión iniciada (renueva el token constantemente)</label>
+        <div class="hint" style="margin-bottom:12px">Con "Mantener sesión" activo, el token se renueva solo y la sesión nunca se cierra. Si lo apagas, al expirar volverás a la pantalla de login.</div>
+        <button class="btn gold" id="btnSave" style="width:100%; justify-content:center">💾 Guardar configuración</button>
+        <div id="saveOk" class="ok" style="margin-top:8px;font-size:12.5px;display:none">✓ Guardado.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ LOG ============ -->
+  <section class="tab" id="tab-log">
+    <div class="card">
+      <h3>🛠️ Modificaciones hechas al bot</h3>
+      <div id="cambiosList" class="muted" style="font-size:12.5px">—</div>
+    </div>
+    <div class="card">
+      <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:10px">
+        <h3 style="margin:0">📜 Actividad completa</h3>
+        <span style="flex:1"></span>
+        <label class="muted" style="font-size:12px; display:flex; align-items:center; gap:6px">
+          <input type="checkbox" id="soloErrores"> ⚠️ solo errores/cambios
+        </label>
+        <button class="btn ghost" id="btnSaveLog" style="padding:6px 12px; font-size:12px">💾 Guardar log</button>
+      </div>
+      <div id="logs" style="height:280px"><span class="t">Esperando actividad…</span></div>
+    </div>
+  </section>
+
+  <!-- ============ RECURSOS ============ -->
+  <section class="tab" id="tab-api">
+    <div class="card">
+      <h3>✅ Implementados (portal web — funcionando) · <span id="nWeb" class="ok">0</span></h3>
+      <div class="ep-list" id="epListWeb"></div>
+    </div>
+    <div class="card">
+      <h3>⏳ Pendientes / dependen de la intervención abierta · <span id="nPend" class="err">0</span></h3>
+      <div class="ep-list" id="epListPend"></div>
+    </div>
+    <div class="card">
+      <h3>🔵 Endpoints de la app (APK) — referencia · <span id="nApp" class="muted">0</span></h3>
+      <div class="ep-list" id="epList"></div>
+      <div class="hint" style="margin-top:10px">Extraídos del binario oficial (<code>libapp.so</code>). La app usa <code>app-key</code> (bloqueado); el bot opera por el portal web.</div>
+    </div>
+  </section>
+</main>
+
+<div class="toast-wrap" id="toasts"></div>
+
+<!-- ============ PANTALLA DE LOGIN ============ -->
+<div id="loginOverlay">
+  <div class="login-card">
+    <div class="login-logo">🤖</div>
+    <h2>BDV Bot Web</h2>
+    <p class="login-sub">Inicia sesión con tu cuenta del banco<br>para operar la compra de divisas</p>
+    <div class="field"><label>Cédula / usuario</label><input id="loginUser" placeholder="V-12345678" autocomplete="username"></div>
+    <div class="field"><label>Clave</label>
+      <div style="display:flex; gap:8px">
+        <input id="loginPass" type="password" placeholder="••••••••" autocomplete="current-password" style="flex:1">
+        <button type="button" id="btnShowPass" style="background:var(--bg2); border:1px solid var(--border); color:var(--muted); border-radius:9px; padding:0 13px; cursor:pointer; font-size:14px">👁</button>
+      </div>
+    </div>
+    <label class="remember"><input type="checkbox" id="loginRemember"> Guardar credenciales en este equipo (.env)</label>
+    <button class="btn gold" id="btnLoginForm" style="width:100%;justify-content:center">🔑 Iniciar sesión</button>
+    <div id="loginMsg"></div>
+    <p class="login-note">🔒 Las credenciales viajan solo de tu navegador al servidor local (127.0.0.1) y de ahí al banco vía login real. Nunca salen de tu máquina.</p>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+let state = null;
+
+/* ---------- tabs (navbar siempre visible) ---------- */
+document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
+  document.querySelectorAll('nav button').forEach(x => x.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+  b.classList.add('active');
+  $('tab-' + b.dataset.tab).classList.add('active');
+  // cargas automáticas por pestaña
+  if (b.dataset.tab === 'movimientos') loadMovimientos();
+  if (b.dataset.tab === 'intervencion') { loadTasa(true); cargarCuentasCompra(); }
+  if (b.dataset.tab === 'panel') loadCuentaSaldo(true);
+});
+
+/* ---------- estado ---------- */
+async function refresh() {
+  try {
+    const r = await fetch('/api/state'); state = await r.json();
+    const b = state.bot, c = state.cfg;
+    // ============ EL BOT ES EL AUTORREENVÍO DE INTERVENCIÓN ============
+    // El control se sincroniza con el estado REAL del ciclo en el servidor:
+    // si el ciclo está corriendo (aunque recargues la página), el botón sigue en ON.
+    syncBotonAuto(b);
+
+    // indicador AUTO REFRESH (mantener sesión)
+    const renew = c.autoRenew !== false;
+    const rb = $('sesRenew');
+    rb.className = 'renew-badge ' + (renew ? 'on' : 'off');
+    rb.textContent = renew ? 'AUTO REFRESH' : 'SIN RENOVAR';
+    rb.title = renew ? 'La sesión se renueva sola (token mantenido)' : 'La sesión expirará al vencer el token';
+
+    // ============ MENUDEO (referencia informativa — NUNCA operativa) ============
+    const mn = (state.tasas && state.tasas.menudeo) || {};
+    if (mn.estado === 'ok') {
+      $('mMCompraUSD').textContent = mn.compraUSD != null ? fmtNum(mn.compraUSD) + ' Bs' : '—';
+      $('mMVentaUSD').textContent = mn.ventaUSD != null ? fmtNum(mn.ventaUSD) + ' Bs' : '—';
+      $('mMCompraEUR').textContent = mn.compraEUR != null ? fmtNum(mn.compraEUR) + ' Bs' : '—';
+      $('mMVentaEUR').textContent = mn.ventaEUR != null ? fmtNum(mn.ventaEUR) + ' Bs' : '—';
+      const me = $('mMEstado');
+      me.textContent = mn.estadoPolitica === 'A' ? 'ACTIVO ✅' : (mn.estadoPolitica || '—');
+      me.style.color = mn.estadoPolitica === 'A' ? 'var(--ok)' : 'var(--muted)';
+      $('mMTs').textContent = mn.timestamp ? ('consultado ' + new Date(mn.timestamp).toLocaleTimeString()) : '';
+      $('mMInfo').textContent = `Comisión ${mn.porcentajeComision || '—'}% · máx ${mn.montoMaximo || '—'} $ · horario ${mn.horaMinimo || '—'}–${mn.horaMaximo || '—'} · turno ${mn.numeroTurno || '—'}`;
+      const dv = mn.divisas || {};
+      $('mMDivisas').textContent = 'Estado por divisa (según el banco): '
+        + `USD ${dv.USD && dv.USD.disponible != null ? (dv.USD.disponible ? 'disponible' : 'no disponible') : 'sin dato'}`
+        + ` · EUR ${dv.EUR && dv.EUR.disponible != null ? (dv.EUR.disponible ? 'disponible' : 'no disponible') : 'sin dato'}`;
+    } else {
+      ['mMCompraUSD', 'mMVentaUSD', 'mMCompraEUR', 'mMVentaEUR'].forEach(id => { $(id).textContent = '—'; });
+      $('mMEstado').textContent = mn.estado === 'error' ? '🔴 sin datos del banco' : '🟠 sin datos';
+      $('mMEstado').style.color = 'var(--gold)';
+      $('mMTs').textContent = '';
+      $('mMInfo').textContent = mn.error ? ('El menudeo no respondió: ' + mn.error) : 'El servicio de menudeo no respondió.';
+      $('mMDivisas').textContent = '';
+    }
+
+    // ============ INTERVENCIÓN — la ÚNICA tasa de operación ============
+    const op = (state.tasas && state.tasas.operativa) || {};
+    const iv = (state.tasas && state.tasas.intervencion) || {};
+    const tiEl = $('mTasaInt');
+    tiEl.textContent = op.disponible ? ((op.tasaTexto || fmtNum(op.tasa)) + ' Bs') : 'NO DISPONIBLE';
+    tiEl.style.color = op.disponible ? 'var(--ok)' : 'var(--muted)';
+    $('mDispInt').innerHTML = op.disponible ? '<span class="ok">✅ OPERATIVA</span>' : '<span class="err">⛔ No disponible</span>';
+    $('mEstadoInt').textContent = (iv.estado || '—')
+      + (iv.code != null ? ` (code ${iv.code})` : '')
+      + (iv.regla ? ` · ${iv.regla}` : '');
+    $('mCupo').textContent = iv.cupoPersNaturales != null ? fmtNum(iv.cupoPersNaturales) + ' $' : '—';
+    $('mComision').textContent = iv.porcentajeComision != null ? fmtNum(iv.porcentajeComision) + ' %' : '—';
+    $('mTsInt').textContent = iv.timestamp ? new Date(iv.timestamp).toLocaleTimeString() : '—';
+    $('mFuenteInt').textContent = 'Fuente: intervención · ' + (iv.endpoint || '/altaintervencioncambiaria/consultarReglasEXRI')
+      + (iv.ageMs != null ? ` · ${iv.edadTexto || ''}` : '')
+      + (iv.deEstaSesion === false ? ' · ⚠️ dato de una sesión anterior' : '');
+    $('mMotivoInt').textContent = op.disponible ? '' : ('Motivo: ' + (op.motivo || 'intervención no disponible'));
+    const hi = state.tasas && state.tasas.historico;
+    $('mMotivoInt').title = hi
+      ? `Histórico guardado (SOLO visual, NO operativo): ${hi.guardada || '?'} · venta USD ${hi.ventaUSDTexto || '?'}`
+      : 'Sin histórico guardado';
+
+    // cupo en el formulario (solo si el banco lo entregó; si no, no se inventa límite)
+    const mh = $('fMontoHint');
+    if (mh) {
+      mh.textContent = iv.cupoPersNaturales != null
+        ? `Cupo máximo del banco (cupoPersNaturales): ${fmtNum(iv.cupoPersNaturales)} $`
+        : 'Cupo según el banco (se conoce cuando la intervención está abierta)';
+    }
+
+    // el campo de tasa sólo PINTA lo que decidió el backend
+    pintarTasaOperativa(op, iv);
+    // indicador de intento (sólo UI): ¿puedo empezar a intentar?
+    pintarIndicadorIntento(op);
+
+    // saldo y cuenta (vienen en el estado saneado)
+    if (state.cuentas && state.cuentas.debito) $('pCuentaWeb').textContent = state.cuentas.debito;
+    const sal = state.saldo;
+    if (sal && sal.disponible != null) {
+      $('pSaldoWeb').textContent = fmtNum(sal.disponible) + ' Bs';
+      $('saldoMsg').textContent = 'Actualizado: ' + new Date().toLocaleTimeString();
+    } else if (sal && sal.mensaje) {
+      $('saldoMsg').textContent = '⚠️ ' + sal.mensaje + ' (el servicio del banco puede estar en mantenimiento — reintentando)';
+    }
+
+    // datos del cliente (vista saneada del backend)
+    const dt = state.datosCliente;
+    if (dt && (dt.name || dt.id)) {
+      const cas = (label, val, mono) => val != null && val !== ''
+        ? `<div class="casilla"><label>${label}</label><div class="v${mono ? ' mono' : ''}">${escapeHtml(String(val))}</div></div>` : '';
+      $('casillas').innerHTML = [
+        cas('Nombre', ((dt.name || '') + ' ' + (dt.lastName || '')).trim()),
+        cas('Cédula', dt.idType && dt.id ? dt.idType + '-' + dt.id : dt.id, true),
+        cas('Teléfono', dt.phone, true),
+        cas('Última conexión', dt.lastConnection),
+        cas('Fecha de nacimiento', dt.fechaNac),
+        cas('Nivel social', dt.socialLevel, true),
+      ].join('') || '<span class="muted">—</span>';
+    } else {
+      $('casillas').innerHTML = '<span class="muted">— sin sesión —</span>';
+    }
+
+    // expiración del token: la entrega el backend (el token NUNCA llega al navegador)
+    window._sesExp = (state.sesion && state.sesion.exp) || null;
+
+    // compra aceptada: se refleja en el estado del autorreenvío (sin pestaña aparte)
+    window._ultimaCompra = (b.compras && b.compras[0]) || null;
+
+    // formulario de configuración (solo la primera vez)
+    if (!window._filled) {
+      window._filled = true;
+      $('cCedula') && ($('cCedula').value = c.cedula);
+      $('cMonto').value = c.montoMaxUSD;
+      $('cInt').value = Math.round((c.intervaloMs || 1000) / 100) / 10;
+      $('cIntVal').textContent = parseFloat($('cInt').value).toFixed(1).replace('.', ',') + ' s';
+      $('cInt').oninput = () => { $('cIntVal').textContent = parseFloat($('cInt').value).toFixed(1).replace('.', ',') + ' s'; };
+      $('cDesde').value = c.ventanaInicio; $('cHasta').value = c.ventanaFin;
+      $('cNotif').checked = !!c.notificarWeb;
+      $('cAutoRenew').checked = c.autoRenew !== false;
+    }
+    // prefill del usuario en Configuración (el número completo de cuenta NUNCA se muestra)
+    if (state.datosCliente && state.datosCliente.id && !$('cUser').value) {
+      $('cUser').value = state.datosCliente.idType ? (state.datosCliente.idType + '-' + state.datosCliente.id) : String(state.datosCliente.id);
+    }
+  } catch (e) {}
+}
+function fmtNum(v) {
+  if (v == null) return '—';
+  let s = String(v).trim();
+  let n;
+  if (s.includes(',')) n = parseFloat(s.replace(/\./g, '').replace(',', '.')); // "799,23804" / "8.000,00"
+  else n = parseFloat(s);                                                    // "385087.73" / "38508773"
+  if (isNaN(n)) return String(v);
+  return n.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+/* ---------- contador de sesión (header) + renovación ---------- */
+setInterval(async () => {
+  const el = $('sesTimer');
+  if (!el) return;
+  if (!window._sesExp) { el.textContent = '⏳ —'; el.style.color = 'var(--muted)'; return; }
+  const rem = window._sesExp - Date.now();
+  // renovar automáticamente ~15 s antes de expirar (solo si mantener sesión está activo)
+  const renewOn = state && state.cfg && state.cfg.autoRenew !== false;
+  if (rem < 15000 && rem > 0 && renewOn && !window._renovando) {
+    window._renovando = true;
+    try {
+      const r = await fetch('/api/web-renew', { method: 'POST' });
+      const d = await r.json();
+      if (d.ok) refresh();
+      else await checkSession();
+    } catch (_) {}
+    window._renovando = false;
+  }
+  if (rem <= 0) {
+    el.textContent = '⏳ EXPIRADA'; el.style.color = 'var(--err)';
+    return;
+  }
+  const s = Math.floor(rem / 1000);
+  const mm = String(Math.floor(s / 60)).padStart(2, '0');
+  const ss = String(s % 60).padStart(2, '0');
+  el.textContent = '⏳ ' + mm + ':' + ss;
+  el.style.color = s < 30 ? 'var(--err)' : (s < 90 ? 'var(--gold)' : 'var(--ok)');
+}, 1000);
+
+/* ---------- logs ---------- */
+async function refreshLogs() {
+  try {
+    const r = await fetch('/api/logs'); const d = await r.json();
+    let lines = d.logs;
+    if ($('soloErrores') && $('soloErrores').checked) {
+      lines = lines.filter(l => /\[(error|warn)\]|Configuración guardada|Credenciales|Login WEB|sesión|Sesión/i.test(l));
+    }
+    $('logs').innerHTML = lines.map(l => {
+      // Línea de REGISTRO OPERATIVO (JSON): se muestra como resumen legible
+      if (l.trim().startsWith('{')) {
+        let o = null; try { o = JSON.parse(l); } catch (_) {}
+        if (o) {
+          const hora = (o.ts || '').slice(11, 19);
+          let det;
+          if (o.tipo === 'compra') {
+            det = `compra http=${o.httpStatus ?? '-'} code=${o.codigo ?? '-'} · tasa=${o.tasaEnviada ?? '-'} (${o.fuenteTasa ?? '-'}) · ${o.estadoBanco || ''}`;
+          } else if (o.tipo === 'cambio') {
+            det = `${o.campo}: ${o.antes ?? '-'} → ${o.despues ?? '-'}`;
+          } else {
+            det = `${o.endpoint || ''} http=${o.httpStatus ?? '-'} code=${o.codigo ?? '-'}`;
+          }
+          return `<div><span class="t">${escapeHtml(hora)}</span> <span class="w">[${escapeHtml(o.tipo || 'oper')}]</span> ${escapeHtml(det)}</div>`;
+        }
+      }
+      const [ts, lvl, ...rest] = l.split('] ['); const msg = rest.join('] [');
+      const cls = { info:'i', warn:'w', error:'e' }[lvl] || 'i';
+      return `<div><span class="t">${ts.slice(1)}</span> <span class="${cls}">${escapeHtml(msg.slice(0, -1))}</span></div>`;
+    }).join('');
+    const el = $('logs'); el.scrollTop = el.scrollHeight;
+  } catch (e) {}
+}
+/* modificaciones hechas al bot */
+async function refreshCambios() {
+  try {
+    const r = await fetch('/api/cambios'); const d = await r.json();
+    const list = d.cambios || [];
+    $('cambiosList').innerHTML = list.length
+      ? list.slice().reverse().map(c =>
+          `<div class="cambio"><span class="t">${escapeHtml(c.ts.slice(11, 19))}</span><span class="m">${escapeHtml(c.msg)}</span></div>`).join('')
+      : '<span class="muted">— sin modificaciones todavía —</span>';
+  } catch (e) {}
+}
+function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+/* ---------- toasts ---------- */
+function toast(title, msg) {
+  const t = document.createElement('div'); t.className = 'toast';
+  t.innerHTML = `<b>🤖 ${escapeHtml(title)}</b><p>${escapeHtml(msg)}</p>`;
+  $('toasts').appendChild(t);
+  setTimeout(() => t.remove(), 8000);
+}
+async function pollPushes() {
+  try {
+    const r = await fetch('/api/pushes'); const d = await r.json();
+    for (const p of d.pushes) toast(p.title, p.msg);
+  } catch (e) {}
+}
+
+/* ---------- movimientos (auto-carga) ---------- */
+let movLoadedAt = 0;
+async function loadMovimientos(force) {
+  if (!force && Date.now() - movLoadedAt < 60000) return;
+  movLoadedAt = Date.now();
+  const msg = document.getElementById('movMsg');
+  const list = document.getElementById('movList');
+  msg.innerHTML = 'Consultando el banco…';
+  try {
+    const res = await fetch('/api/web-movimientos', { method: 'POST' });
+    const d = await res.json();
+    if (d.ok && Array.isArray(d.movimientos) && d.movimientos.length) {
+      msg.innerHTML = `✅ <b>${d.movimientos.length} movimientos reales</b> de tu cuenta.`;
+      list.innerHTML = renderMovs(d.movimientos);
+    } else {
+      msg.innerHTML = '⚠️ ' + escapeHtml((d.error) || 'sin movimientos');
+      list.innerHTML = '';
+    }
+  } catch (e) { msg.innerHTML = '❌ ' + escapeHtml(e.message); }
+}
+$('btnMov').onclick = () => loadMovimientos(true);
+function renderMovs(movs) {
+  const hoy = new Date();
+  const ayer = new Date(Date.now() - 86400000);
+  const dkey = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const hoyK = dkey(hoy), ayerK = dkey(ayer);
+  const fmt = s => { const p = s.split(' ')[0].split('-'); return `${p[2]}-${p[1]}-${p[0]}`; };
+  const etiqueta = k => k === hoyK ? 'HOY' : k === ayerK ? 'AYER' : k.split('-').reverse().join('-');
+  const grupos = {};
+  for (const m of movs) {
+    const k = fmt(m.fecha || '');
+    grupos[k] = grupos[k] || []; grupos[k].push(m);
+  }
+  const orden = Object.keys(grupos).sort((a, b) => b.localeCompare(a));
+  return orden.map(dia => `
+    <div style="margin-top:12px">
+      <div style="font-size:11.5px; font-weight:800; letter-spacing:1px; color:var(--muted); border-bottom:1px solid var(--border); padding-bottom:5px">${etiqueta(dia)}</div>
+      ${grupos[dia].map(m => {
+        const cred = /CREDITO|ABONO/i.test(m.indicadorCargoAbono || '');
+        const imp = Number(m.importe);
+        const monto = !isNaN(imp) ? Math.abs(imp).toLocaleString('es-VE', {minimumFractionDigits:2}) : (String(m.importe||'').replace('-','') || '—');
+        return `<div style="display:flex; align-items:center; gap:10px; padding:10px 4px; border-bottom:1px solid rgba(38,54,92,.4)">
+          <span style="width:30px; height:30px; border-radius:50%; display:grid; place-items:center; font-size:14px; flex-shrink:0;
+            background:${cred ? 'rgba(47,212,122,.14)' : 'rgba(255,93,108,.12)'}">${cred ? '⬇' : '⬆'}</span>
+          <div style="flex:1; min-width:0">
+            <div style="font-size:12.5px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis">${escapeHtml(String(m.descripcion || m.tipoMovimiento || '').trim())}</div>
+            <div style="font-size:11px; color:var(--muted)">${escapeHtml(m.fecha || '')} · ref ${escapeHtml(String(m.referencia||'').trim())}</div>
+          </div>
+          <div style="text-align:right; flex-shrink:0">
+            <div style="font-size:13.5px; font-weight:700; color:${cred ? 'var(--ok)' : 'var(--text)'}">${cred ? '+' : '−'} ${monto} Bs</div>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>`).join('');
+}
+
+/* ---------- cuenta + saldo (auto-carga al abrir el panel) ---------- */
+let saldoLoadedAt = 0;
+async function loadCuentaSaldo(force) {
+  if (!force && Date.now() - saldoLoadedAt < 120000) return;
+  saldoLoadedAt = Date.now();
+  try {
+    const rc = await fetch('/api/web-cuentas', { method: 'POST' });
+    const dc = await rc.json();
+    if (dc.ok && dc.cuentas && dc.cuentas.length) $('pCuentaWeb').textContent = dc.cuentas[0].cuenta;
+    const rs = await fetch('/api/web-saldo', { method: 'POST' });
+    const ds = await rs.json();
+    if (ds.ok && ds.saldo && ds.saldo.data && ds.saldo.data.saldoDisponible != null) {
+      $('pSaldoWeb').textContent = fmtNum(ds.saldo.data.saldoDisponible) + ' Bs';
+      $('saldoMsg').textContent = 'Actualizado: ' + new Date().toLocaleTimeString();
+    } else if (ds.ok && ds.saldo && ds.saldo.message) {
+      $('saldoMsg').textContent = '⚠️ ' + ds.saldo.message + ' — reintentando cada 2 min';
+    } else {
+      $('saldoMsg').textContent = '⚠️ ' + escapeHtml((ds.error || 'sin saldo'));
+    }
+  } catch (e) { $('saldoMsg').textContent = '❌ ' + escapeHtml(e.message); }
+}
+
+/* ---------- tasa ---------- */
+async function loadTasa(force) {
+  if (!force && window._tasaLoadedAt && Date.now() - window._tasaLoadedAt < 120000) return;
+  window._tasaLoadedAt = Date.now();
+  try {
+    const res = await fetch('/api/web-tasa', { method: 'POST' });
+    const d = await res.json();
+    refresh();
+  } catch (e) {}
+}
+$('btnTasa').onclick = () => loadTasa(true);
+
+/* ---------- compra de divisas (formulario como la app) ---------- */
+async function cargarCuentasCompra() {
+  try {
+    // El panel sólo conoce la MÁSCARA de cada cuenta (el número real vive en el servidor)
+    const rc = await fetch('/api/web-cuentas', { method: 'POST' });
+    const dc = await rc.json();
+    if (dc.ok && dc.cuentas && dc.cuentas.length) {
+      $('fCtaDebito').innerHTML = dc.cuentas.map(c =>
+        `<option value="${escapeHtml(c.id)}">${escapeHtml(c.mascara)} · ${escapeHtml(c.tipo || '')}</option>`).join('');
+    }
+    const r = await fetch('/api/web-cuentas-divisa', { method: 'POST' });
+    const d = await r.json();
+    if (d.ok && d.cuentas && d.cuentas.length) {
+      $('fCtaDestino').innerHTML = d.cuentas.map(c =>
+        `<option value="${escapeHtml(c.id)}">${escapeHtml(c.mascara)} · ${escapeHtml(c.tipo || 'USD')}</option>`).join('');
+    } else {
+      $('fCtaDestino').innerHTML = '<option value="">— sin cuentas USD —</option>';
+    }
+  } catch (e) {}
+}
+// El campo de tasa PINTA la tasa que entregó el backend (state.tasas.operativa).
+// El panel NO elige tasa. Dos casos distintos y bien separados:
+//   1) EXRI abierta  → tasa de intervención (tasaReferencia). Operativa.
+//   2) EXRI cerrada  → NO se dice "no hay tasa": si el banco publica la tasa del
+//      menudeo, se MUESTRA rotulada como publicada (NO operativa de intervención).
+function pintarTasaOperativa(op, iv) {
+  const el = $('fTasa'), fu = $('fTasaFuente'), es = $('fTasaEstado');
+  if (op && op.disponible) {
+    el.value = (op.tasaTexto || fmtNum(op.tasa)) + ' Bs';
+    el.dataset.tasa = String(op.tasa);
+    el.dataset.origen = op.origen || 'intervencion';
+    el.dataset.timestamp = op.timestamp || '';
+    el.style.color = 'var(--ok)';
+    el.title = 'Tasa de intervención (tasaReferencia) entregada por el servidor';
+    if (fu) fu.textContent = 'Fuente: intervención · ' + ((iv && iv.endpoint) || 'consultarReglasEXRI') + (op.regla ? ` · regla ${op.regla}` : '');
+    if (es) es.innerHTML = `<span class="ok">OPERATIVA</span> · ${op.edadTexto || ''}`;
+  } else if (op && op.tasaPublicada > 0) {
+    // Intervención cerrada PERO hay tasa publicada del menudeo en vivo.
+    el.value = (op.tasaPublicadaTexto || fmtNum(op.tasaPublicada)) + ' Bs';
+    el.dataset.tasa = String(op.tasaPublicada);
+    el.dataset.origen = op.fuenteTasaPublicada || 'menudeo';
+    el.dataset.timestamp = (op.publicadaMenudeo && op.publicadaMenudeo.timestamp) || '';
+    el.style.color = 'var(--muted)';
+    el.title = 'Tasa publicada por el banco (menudeo). La intervención está cerrada: no es la tasa operativa de la intervención.';
+    if (fu) fu.textContent = 'Fuente: ' + (op.fuenteTasaPublicada || 'menudeo') + ' · tasa publicada (NO operativa de intervención)';
+    if (es) es.innerHTML = `<span class="err">INTERVENCIÓN CERRADA</span> · tasa publicada disponible`;
+  } else {
+    el.value = 'NO DISPONIBLE';
+    el.dataset.tasa = '';
+    el.dataset.origen = '';
+    el.dataset.timestamp = '';
+    el.style.color = 'var(--muted)';
+    el.title = (op && op.motivo) || 'La intervención no está disponible';
+    if (fu) fu.textContent = 'Fuente: intervención · sin tasa publicada';
+    if (es) es.innerHTML = `<span class="err">Sin tasa</span> · ${(op && op.motivo) || ''}`;
+  }
+}
+// INDICADOR DE INTENTO — sólo interfaz. Responde a: "¿puedo empezar a intentar?".
+// Distingue 3 situaciones, sin confundir "tasa publicada" con "intervención abierta":
+//   1) TASA DISPONIBLE — PUEDES INICIAR LOS INTENTOS  (hay tasa publicada, interv. cerrada)
+//   2) INTERVENCIÓN ABIERTA — OPERATIVA               (EXRI con tasaReferencia)
+//   3) SIN TASA — ESPERA                              (ni EXRI ni menudeo)
+// Se apaga/actualiza solo en cada refresco del panel.
+function pintarIndicadorIntento(op) {
+  const box = $('indicadorIntento');
+  if (!box) return;
+  const icono = $('indIcono'), titulo = $('indTitulo'), badge = $('indBadge'), det = $('indDetalle');
+  const iv = (state && state.tasas && state.tasas.intervencion) || {};
+
+  const hayEXRI = !!(op && op.disponible && op.tasa > 0);
+  const hayPublicada = !!(op && op.tasaPublicada > 0);
+  const estado = hayEXRI ? 'abierta' : (hayPublicada ? 'publicada' : 'sin_tasa');
+
+  const estilos = {
+    abierta:   { borde: 'var(--ok,#2e7d32)',      fondo: 'rgba(46,125,50,.12)',  icono: '🟢' },
+    publicada: { borde: 'var(--ok,#2e7d32)',      fondo: 'rgba(46,125,50,.12)',  icono: '🟢' },
+    sin_tasa:  { borde: 'var(--muted,#888)',      fondo: 'rgba(136,136,136,.10)',icono: '⏳' }
+  };
+  const e = estilos[estado];
+
+  box.style.display = 'block';
+  box.style.borderColor = e.borde;
+  box.style.background = e.fondo;
+  icono.textContent = e.icono;
+
+  if (estado === 'abierta') {
+    titulo.textContent = 'INTERVENCIÓN ABIERTA — OPERATIVA';
+    titulo.style.color = e.borde;
+    badge.textContent = 'LISTO';
+    badge.style.color = e.borde;
+    det.innerHTML = `Tasa de intervención <b>${escapeHtml(op.tasaTexto || fmtNum(op.tasa))} Bs/USD</b>`
+      + (op.regla ? ` · regla <b>${escapeHtml(op.regla)}</b>` : '')
+      + `<br>El banco publicó su tasa: ya puedes operar.`
+      + `<br><span class="muted">Intervención: <b>ABIERTA</b>${op.edadTexto ? ' · ' + escapeHtml(op.edadTexto) : ''}</span>`;
+  } else if (estado === 'publicada') {
+    const pm = op.publicadaMenudeo || {};
+    titulo.textContent = 'TASA DISPONIBLE — LISTO PARA INTENTAR';
+    titulo.style.color = e.borde;
+    badge.textContent = 'LISTO';
+    badge.style.color = e.borde;
+    det.innerHTML = `Tasa publicada: <b>${escapeHtml(op.tasaPublicadaTexto || fmtNum(op.tasaPublicada))} Bs/USD</b>`
+      + ` · fuente <b>${escapeHtml(op.fuenteTasaPublicada || 'menudeo')}</b>`
+      + (pm.campo ? ` <span class="muted">(${escapeHtml(pm.campo)})</span>` : '')
+      + `<br>Intervención: <b>CERRADA</b> <span class="muted">(estado independiente de la tasa)</span>`
+      + `<br>Puedes iniciar los intentos: el banco decide si acepta la orden.`
+      + (pm.timestamp ? `<br><span class="muted">Actualizada: ${escapeHtml(haceTexto(pm.timestamp))}</span>` : '');
+  } else {
+    titulo.textContent = 'SIN TASA — ESPERA';
+    titulo.style.color = e.borde;
+    badge.textContent = 'ESPERAR';
+    badge.style.color = e.borde;
+    det.innerHTML = `No hay tasa publicada disponible ahora`
+      + `<br><span class="muted">Intervención: <b>${escapeHtml(String(iv.estado || 'sin datos').toUpperCase())}</b>`
+      + (op && op.motivo ? ` · ${escapeHtml(op.motivo)}` : '') + `</span>`;
+  }
+}
+// EL BOT ES EL AUTORREENVÍO DE INTERVENCIÓN.
+// Este control refleja el estado REAL del ciclo en el servidor: si el bot está
+// corriendo (aunque se recargue la página), el botón queda en ACTIVO y muestra
+// el avance. No hay pestaña aparte: el ciclo vive aquí.
+function syncBotonAuto(b) {
+  const btn = $('btnAutoReenvio');
+  const st = $('autoStatus');
+  if (!btn) return;
+  const activo = !!(b && b.running);
+  btn.textContent = activo ? '🔁 AUTORREENVÍO: ACTIVO' : '🔁 AUTORREENVÍO: OFF';
+  btn.classList.toggle('gold', activo);
+  window._autoServidorActivo = activo;
+  if (!st) return;
+  if (activo) {
+    const uc = window._ultimaCompra;
+    st.innerHTML = `🟢 <b>BOT TRABAJANDO</b> — intento <b>#${b.rechazos || 0}</b> · chequeos ${b.checks || 0}`
+      + (b.saldoInsuficiente ? ' · <span style="color:var(--gold)">⚠️ sin fondos</span>' : '')
+      + (b.lastCheck ? `<br><span class="muted">Última consulta al banco: ${new Date(b.lastCheck).toLocaleTimeString()}</span>` : '')
+      + (uc ? `<br><span class="muted">Última compra: ${uc.montoUSD} USD @ ${uc.tasa} Bs · ref ${uc.referencia}</span>` : '');
+  } else if (!st.dataset.mensajeManual) {
+    st.innerHTML = '⏹️ Detenido. Pulsa AUTORREENVÍO para que el bot empiece a consultar y comprar automáticamente.';
+  }
+}
+
+// "hace 12 s" a partir de una marca ISO
+function haceTexto(ts) {
+  if (!ts) return 'sin datos';
+  const ms = Date.now() - new Date(ts).getTime();
+  if (ms < 2000) return 'ahora mismo';
+  if (ms < 60000) return `hace ${Math.round(ms / 1000)} s`;
+  if (ms < 3600000) return `hace ${Math.round(ms / 60000)} min`;
+  return `hace ${Math.round(ms / 3600000)} h`;
+}
+$('btnLimpiar').onclick = () => {
+  // Limpiar vuelve a los PREDETERMINADOS del usuario: 10 USD, Otros (11), No aplica (22)
+  $('fMonto').value = '10';
+  $('fDestino').value = '11';
+  $('fActividad').value = '22';
+  window._destinoElegido = false;
+  window._actividadElegida = false;
+  $('compraMsg').innerHTML = '';
+  $('compraResumenCard').style.display = 'none';
+};
+$('btnContinuar').onclick = async () => {
+  const msg = document.getElementById('compraMsg');
+  const ctaD = $('fCtaDebito').value, ctaU = $('fCtaDestino').value;
+  const monto = parseFloat($('fMonto').value);
+  const op = (state && state.tasas && state.tasas.operativa) || {};
+  const iv = (state && state.tasas && state.tasas.intervencion) || {};
+  msg.className = '';
+  if (!ctaD) { msg.innerHTML = '❌ Elige la cuenta a debitar.'; return; }
+  if (!ctaU) { msg.innerHTML = '❌ Elige la cuenta destino en USD.'; return; }
+  // Tasa disponible: EXRI (operativa) o, si la intervención está cerrada, la tasa
+  // PUBLICADA del menudeo en vivo. Nunca caché ni valor fijo.
+  const tasaUsar = op.disponible ? op.tasa
+    : (op.tasaPublicada > 0 ? op.tasaPublicada : null);
+  if (tasaUsar == null) {
+    msg.className = 'err';
+    msg.innerHTML = '⛔ <b>Sin tasa disponible del banco</b> — ' + escapeHtml(op.motivo || 'la intervención no está disponible')
+      + '. No se puede preparar la operación.';
+    return;
+  }
+  if (!monto || monto <= 0) { msg.innerHTML = '❌ Pon un monto válido.'; return; }
+  // cupo REAL de la intervención (cupoPersNaturales del banco) si está disponible; si no, no se inventa límite
+  const cupoReal = iv.cupoPersNaturales;
+  if (cupoReal != null && monto > Number(cupoReal)) {
+    msg.innerHTML = `❌ El cupo máximo del banco es ${fmtNum(cupoReal)} $ (cupoPersNaturales).`;
+    return;
+  }
+  // COMPONENTES SEPARADOS. La comisión NO se calcula: sólo se muestra el porcentaje
+  // que entregó el banco (la base de cálculo no está verificada contractualmente).
+  const tasa = tasaUsar;
+  const esEXRI = !!op.disponible;
+  const etiquetaTasa = esEXRI ? 'Tasa (intervención)' : 'Tasa publicada';
+  const fuenteTasaTxt = esEXRI ? (op.origen || 'intervencion') : (op.fuenteTasaPublicada || 'menudeo');
+  const subtotal = monto * tasa;
+  const comPct = op.porcentajeComision != null ? op.porcentajeComision : null;
+  const cas = (label, val) => `<div class="casilla"><label>${label}</label><div class="v">${val}</div></div>`;
+  $('compraResumen').innerHTML = [
+    cas('Monto en divisas', fmtNum(monto) + ' $'),
+    cas(etiquetaTasa, ((esEXRI ? op.tasaTexto : op.tasaPublicadaTexto) || fmtNum(tasa)) + ' Bs'),
+    cas('Subtotal (monto × tasa)', fmtNum(subtotal) + ' Bs'),
+    cas('Comisión', comPct != null ? `según banco (${fmtNum(comPct)} %)` : 'según banco'),
+    cas('Total', comPct != null ? `≈ ${fmtNum(subtotal)} Bs + comisión del banco` : fmtNum(subtotal) + ' Bs'),
+    cas('Origen (Bs)', ctaD),
+    cas('Destino (USD)', ctaU),
+    cas('Destino de los fondos', $('fDestino').value),
+    cas('Mercado', esEXRI ? 'INTERVENCIÓN' : 'MENUDEO (tasa publicada)'),
+  ].join('');
+  msg.className = '';
+  msg.innerHTML = esEXRI
+    ? `<span class="muted">Tasa operativa de intervención: ${escapeHtml(op.tasaTexto || '')} (${escapeHtml(op.origen || '')}, ${escapeHtml(op.edadTexto || '')}). El servidor revalidará la tasa al enviar.</span>`
+    : `<span class="muted">Intervención cerrada. Se usará la <b>tasa publicada</b> (${escapeHtml(fuenteTasaTxt)}): ${escapeHtml(op.tasaPublicadaTexto || '')} Bs/USD. El servidor revalidará al enviar y el banco decide si acepta la orden.</span>`;
+  $('compraEjecutar').innerHTML = `
+    <div class="hint" style="margin-bottom:10px">Verifica los datos. <b>Confirmar y ejecutar compra</b> envía una orden ahora. <b>AUTORREENVÍO</b> es el bot: arranca el ciclo automático que consulta al banco, mantiene la tasa vigente y reintenta la compra en cada vuelta hasta que el banco acepte o lo detengas.</div>
+    <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap">
+      <button class="btn gold" id="btnEjecutarCompra" style="min-width:250px; text-align:center">✅ Confirmar y ejecutar compra</button>
+      <button class="btn" id="btnAutoReenvio" style="min-width:215px; text-align:center">🔁 AUTORREENVÍO: OFF</button>
+      <label class="muted" style="font-size:12px; display:flex; align-items:center; gap:8px">Intervalo
+        <input id="autoDelay" type="range" min="0.1" max="5" step="0.1" value="0.5"
+          style="width:120px; accent-color:var(--accent); cursor:pointer">
+        <span id="autoDelayVal" style="min-width:40px; font-weight:700; color:var(--fg)">0,5 s</span>
+      </label>
+    </div>
+    <div id="autoStatus" class="muted" style="font-size:12px; margin-top:8px; min-height:18px; overflow:hidden; white-space:nowrap; text-overflow:ellipsis"></div>`;
+  $('compraResumenCard').style.display = 'block';
+  msg.innerHTML = '';
+  // El usuario ELIGE a propósito: sólo entonces se permite cambiar la config guardada.
+  // Si el <select> cambia solo (recarga, reconstrucción del combo) NO se marca.
+  $('fDestino').addEventListener('change', () => { window._destinoElegido = true; });
+  $('fActividad').addEventListener('change', () => { window._actividadElegida = true; });
+
+  // ---- delay del ciclo (lo usa el autorreenvío al arrancar el bot) ----
+  // Cambiar el delay NO detiene el ciclo en marcha: se aplica al reiniciarlo.
+  $('autoDelay').oninput = () => {
+    $('autoDelayVal').textContent = parseFloat($('autoDelay').value).toFixed(1).replace('.', ',') + ' s';
+    if (window._autoServidorActivo) {
+      document.getElementById('autoStatus').innerHTML =
+        'ℹ️ El intervalo se aplicará al reiniciar el bot (el ciclo actual sigue activo).';
+    }
+  };
+
+  // UNA sola función de envío: la usa el botón (1 vez) y el auto reenvío (cada ciclo)
+  const enviarOrden = async () => {
+    const b = $('btnEjecutarCompra');
+    b.disabled = true; b.textContent = '⏳ Enviando al banco…';
+    msg.innerHTML = 'Enviando la orden al banco…';
+    let d = null;
+    try {
+      // NO se envía la tasa: el SERVIDOR decide la tasa operativa y resuelve las
+      // cuentas, de modo que la UI y el backend usan exactamente la misma tasa.
+      const res = await fetch('/api/web-comprar', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          cuentaDebito: ctaD, cuentaDestino: ctaU, monto: monto.toFixed(2),
+          destinoFondos: $('fDestino').value,
+          actividadEconomica: $('fActividad').value
+        }) });
+      d = await res.json();
+      if (d.ok) {
+        const r = d.respuesta || {};
+        const id = r.referencia || r.operacion || r.id || '';
+        const ope = d.operacion || {};
+        msg.className = 'ok';
+        msg.innerHTML = `🎉 <b>¡COMPRA REALIZADA EXITOSAMENTE!</b>${id ? ` — ID <b>${escapeHtml(id)}</b>` : ''} ${escapeHtml(r.decodret || r.descripcion || '')}`
+          + `<br><span class="muted">Tasa usada por el servidor: ${escapeHtml(ope.tasaTexto || '')} Bs (${escapeHtml(ope.origenTasa || '')}) · subtotal ${fmtNum(ope.subtotal)} Bs</span>`;
+        toast('Compra aceptada', '¡El banco procesó tu orden!');
+        if (window._autoServidorActivo) {
+          // el ciclo del servidor se detiene solo al aceptar el banco
+          const ab = $('btnAutoReenvio');
+          ab.textContent = '🔁 AUTORREENVÍO: OFF'; ab.classList.remove('gold');
+          window._autoServidorActivo = false;
+          document.getElementById('autoStatus').innerHTML = '✅ <b>Compra aceptada</b> — el bot se detuvo automáticamente.';
+        }
+      } else {
+        msg.className = 'err';
+        // el diagnóstico llega separado por código (no se fusionan 500 / 1001 / otros)
+        const dg = d.diagnostico || {};
+        msg.innerHTML = '❌ ' + escapeHtml(d.error || 'falló')
+          + (dg.code != null ? `<br><span class="muted">Diagnóstico: code=${escapeHtml(String(dg.code))} · estado=${escapeHtml(d.estadoBanco || '')}`
+            + (dg.httpStatus != null ? ` · HTTP ${escapeHtml(String(dg.httpStatus))}` : '')
+            + (dg.correlacion ? ` · correlación ${escapeHtml(String(dg.correlacion))}` : '') + '</span>' : '');
+      }
+    } catch (e) { msg.className = 'err'; msg.innerHTML = '❌ ' + escapeHtml(e.message); }
+    b.disabled = false; b.textContent = '✅ Confirmar y ejecutar compra';
+    return d;
+  };
+  $('btnEjecutarCompra').onclick = () => enviarOrden();
+
+  // ==========================================================================
+  // AUTORREENVÍO = EL BOT
+  // --------------------------------------------------------------------------
+  // Activa el ciclo automático en el SERVIDOR con los datos de esta operación.
+  // El ciclo arranca de inmediato (aunque el banco aún no permita comprar),
+  // consulta al banco en cada vuelta, actualiza la tasa si cambia, reintenta
+  // según el intervalo y guarda todo en el log operativo. Sigue corriendo
+  // aunque se recargue la página, hasta que el banco acepte o se detenga aquí.
+  // ==========================================================================
+  $('btnAutoReenvio').onclick = async () => {
+    const btn = $('btnAutoReenvio');
+    const st = document.getElementById('autoStatus');
+    const activo = !!window._autoServidorActivo;
+
+    if (activo) { // ---- DETENER el ciclo ----
+      btn.disabled = true;
+      await fetch('/api/stop', { method: 'POST' });
+      st.dataset.mensajeManual = '1';
+      st.innerHTML = '⏹️ <b>BOT DETENIDO</b> — el ciclo dejó de consultar.';
+      delete st.dataset.mensajeManual;
+      btn.disabled = false;
+      refresh();
+      return;
+    }
+
+    // ---- INICIAR el ciclo ----
+    if (!ctaD || !ctaU) { msg.className = 'err'; msg.innerHTML = '❌ Elige las cuentas primero.'; return; }
+    if (!monto || monto <= 0) { msg.className = 'err'; msg.innerHTML = '❌ Pon un monto válido.'; return; }
+    const delay = Math.max(0.1, Math.min(5, parseFloat($('autoDelay').value) || 0.5));
+
+    btn.disabled = true;
+    st.dataset.mensajeManual = '1';
+    st.innerHTML = '▶️ Arrancando el bot…';
+    try {
+      // El destino/actividad sólo se CAMBIAN si el usuario los eligió a propósito en
+      // esta sesión del formulario. Así, arrancar el ciclo no pisa la configuración
+      // guardada con lo que muestre el <select> (recarga, combo sin cargar, etc.).
+      const r = await fetch('/api/start', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          monto: $('fMonto').value || undefined,
+          cuentaDebito: $('fCtaDebito').value || undefined,
+          cuentaDestino: $('fCtaDestino').value || undefined,
+          destinoFondos: $('fDestino').value || undefined,
+          destinoFondosCambio: !!window._destinoElegido,
+          actividadEconomica: $('fActividad').value || undefined,
+          actividadEconomicaCambio: !!window._actividadElegida,
+          intervaloMs: Math.round(delay * 1000)
+        })
+      });
+      const d = await r.json();
+      if (!d || !d.ok) throw new Error((d && d.error) || 'el servidor no inició el ciclo');
+      st.innerHTML = `🟢 <b>BOT TRABAJANDO</b> — consultando al banco cada ${delay.toFixed(1)} s…`;
+      msg.className = '';
+      msg.innerHTML = '🟢 Bot activo. Consulta la tasa, la actualiza si cambia y reintenta la compra en cada ciclo. Puedes cerrar o recargar la página: el ciclo sigue.';
+    } catch (e) {
+      msg.className = 'err'; msg.innerHTML = '❌ ' + escapeHtml(e.message);
+      st.innerHTML = '⏹️ No se pudo iniciar.';
+    }
+    delete st.dataset.mensajeManual;
+    btn.disabled = false;
+    refresh();
+  };
+};
+$('btnSaveLog').onclick = () => {
+  // descargar el log completo como archivo .txt
+  const a = document.createElement('a');
+  a.href = '/api/log-export';
+  a.download = 'bot-log.txt';
+  document.body.appendChild(a); a.click(); a.remove();
+  toast('Log guardado', 'El archivo bot-log.txt se descargó');
+};
+$('soloErrores').onchange = () => refreshLogs();
+
+/* ---------- sesión ---------- */
+async function checkSession() {
+  try {
+    const r = await fetch('/api/session'); const d = await r.json();
+    const dot = $('sesDot'), user = $('sesUser'), logout = $('btnLogout');
+    if (d.loggedIn) {
+      dot.className = 'ses-dot on';
+      user.textContent = d.username || 'conectado';
+      user.className = 'ses-user';
+      logout.style.display = 'inline-block';
+      $('loginOverlay').style.display = 'none';
+    } else {
+      dot.className = 'ses-dot off';
+      user.textContent = 'sin sesión';
+      user.className = 'ses-user muted';
+      logout.style.display = 'none';
+      $('loginOverlay').style.display = 'grid';
+      if (d.username) $('loginUser').value = d.username;
+      if (d.hasSavedPassword) {
+        // SEGURIDAD: la clave guardada NO viaja al navegador; el servidor la usa si el campo va vacío
+        $('loginPass').value = '';
+        $('loginPass').placeholder = '•••••••• (guardada en el servidor)';
+        $('loginMsg').className = 'ok';
+        $('loginMsg').textContent = '🔑 Credenciales guardadas — presiona "Iniciar sesión" (o espera: intento automático).';
+        // inicio automático (una sola vez)
+        if (!window._autoLoginTried) {
+          window._autoLoginTried = true;
+          doLogin();
+        }
+      }
+    }
+  } catch (e) {}
+}
+async function doLogin() {
+  const u = $('loginUser').value.trim(), p = $('loginPass').value;
+  const msg = $('loginMsg');
+  if (!u || !p) { msg.className = 'err'; msg.textContent = 'Pon tu cédula y tu clave.'; return; }
+  msg.className = ''; msg.textContent = '🌐 Logueando por el portal web (2 pasos)… puede tardar unos segundos';
+  const btn = $('btnLoginForm'); btn.disabled = true;
+  try {
+    const res = await fetch('/api/login-web', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: u, password: p, remember: $('loginRemember').checked }) });
+    const d = await res.json();
+    if (d.ok) {
+      msg.className = 'ok'; msg.textContent = '✅ ¡Login exitoso! Sesión web activa.';
+      $('loginPass').value = '';
+      await checkSession(); refresh();
+      toast('Sesión iniciada', 'Logueado en bdvenlinea como ' + u);
+    } else {
+      msg.className = 'err'; msg.textContent = '❌ ' + (d.error || d.msg || 'No se pudo iniciar sesión');
+    }
+  } catch (e) { msg.className = 'err'; msg.textContent = '❌ Error de conexión: ' + e.message; }
+  btn.disabled = false;
+}
+$('btnLoginForm').onclick = doLogin;
+$('loginPass').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+$('btnShowPass').onclick = () => {
+  const f = $('loginPass');
+  f.type = f.type === 'password' ? 'text' : 'password';
+  $('btnShowPass').textContent = f.type === 'password' ? '👁' : '🙈';
+};
+$('btnShowPass2').onclick = () => {
+  const f = $('cPass');
+  f.type = f.type === 'password' ? 'text' : 'password';
+  $('btnShowPass2').textContent = f.type === 'password' ? '👁' : '🙈';
+};
+async function cerrarSesion() {
+  await fetch('/api/web-logout', { method: 'POST' });
+  checkSession();
+}
+$('btnLogout').onclick = cerrarSesion;
+
+/* ---------- config: login con guardado ---------- */
+$('btnLoginCfg').onclick = async () => {
+  const u = $('cUser').value.trim(), p = $('cPass').value;
+  const msg = document.getElementById('loginCfgMsg');
+  if (!u || !p) { msg.className = 'err'; msg.textContent = 'Pon tu usuario y clave.'; return; }
+  msg.textContent = '🌐 Guardando e iniciando sesión…';
+  try {
+    const res = await fetch('/api/login-web', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: u, password: p, remember: true }) });
+    const d = await res.json();
+    if (d.ok) {
+      msg.className = 'ok'; msg.textContent = '✅ Credenciales guardadas en .env y sesión iniciada.';
+      $('cPass').value = '';
+      await checkSession(); refresh();
+    } else {
+      msg.className = 'err'; msg.textContent = '❌ ' + (d.error || 'falló');
+    }
+  } catch (e) { msg.className = 'err'; msg.textContent = '❌ ' + e.message; }
+};
+
+/* ---------- configuración ---------- */
+$('btnSave').onclick = async () => {
+  const cfg = {
+    mode: 'real', cedula: $('cCedula') ? $('cCedula').value.trim() : '',
+    montoMaxUSD: +$('cMonto').value || 0,
+    ventanaInicio: $('cDesde').value, ventanaFin: $('cHasta').value,
+    intervaloMs: (+$('cInt').value || 1) * 1000, notificarWeb: $('cNotif').checked,
+    autoRenew: $('cAutoRenew').checked
+  };
+  const r = await fetch('/api/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cfg) });
+  if (r.ok) { $('saveOk').style.display = 'block'; setTimeout(() => $('saveOk').style.display = 'none', 3500); refresh(); }
+};
+
+/* ---------- recursos y APIs ---------- */
+const IMPLEMENTADOS = [
+  ['POST', '/oauthaccess/login', 'Login web (2 pasos, cifrado AES)'],
+  ['POST', '/oauthaccess/verificar-usuario-unico', 'Paso 1 del login: valida el usuario → ticket'],
+  ['POST', '/oauthaccess/actualizar', 'Renueva la sesión (refresh_token) — sin re-loguear'],
+  ['POST', '/oauthaccess/cerrar', 'Cierra la sesión (logout)'],
+  ['GET',  '/consultasaldocuenta/consultaCuentas', 'Cuentas del cliente'],
+  ['GET',  '/obtenercuentadivisa/getCuentaDivisa', 'Cuentas en divisas (destino USD)'],
+  ['POST', '/menudeo/consulta-mercado/', 'Tasas de MENUDEO — sólo referencia, NO operativa'],
+  ['POST', '/consulta-saldo-cuenta-cliente/consulta/saldo', 'Saldo disponible (mantenimiento nocturno)'],
+  ['POST', '/altaintervencioncambiaria/consultarReglasEXRI', 'Tasa de INTERVENCIÓN (tasaReferencia) — la única operativa'],
+  ['GET',  '/altaintervencioncambiaria/obtenerDataCombo', 'Catálogo: actividades económicas y destinos'],
+  ['POST', '/mesacambiaria/sellbuycurrencyEXCV', 'EJECUTAR la compra de divisas (requiere intervención abierta)'],
+  ['POST', '/picconsultamovimientos/queryLastMovements', 'Movimientos de la cuenta (historial)'],
+];
+const PENDIENTES = [
+  ['POST', '/altaintervencioncambiaria/validacionDivisa', 'Valida la operación — CONTRATO NO VERIFICADO'],
+  ['POST', '/altaintervencioncambiaria/detalleIntervencionCambiariaEXID', 'Detalle/estado de operaciones (no usado)'],
+  ['POST', '/mesacambiaria/consultaReglasEXRGR', 'Reglas de retiro de divisas en agencia (no usado)'],
+  ['POST', '/mesacambiaria/consulExInterOfEstado', 'Estados para retiro en agencia (no usado)'],
+];
+const ENDPOINTS = [
+  ['GET',  '/bdvx-intervencion-cambiaria/v1/intervencion/consultarReglasEXRI', 'Reglas vigentes de la intervención (app)'],
+  ['GET',  '/bdvx-intervencion-cambiaria/v1/intervencion/', 'Estado de la intervención (app)'],
+  ['GET',  '/bdvx-menudeo-v2/v1/mercado', 'Mercado menudeo / tasas (app)'],
+  ['POST', '/bdvx-menudeo-v2/v1/transar', 'Operación de menudeo (app)'],
+  ['POST', '/bdvx-operaciones-cambiarias/v1/operaciones/comprar', 'Orden de compra de divisas (app)'],
+  ['POST', '/bdvx-operaciones-cambiarias/v1/operaciones/confirmar', 'Confirmación de la operación (app)'],
+  ['GET',  '/bdvx-operaciones-cambiarias/v1/operaciones/consultar/estados', 'Estado de la operación (app)'],
+  ['POST', '/bdvx-oauth-server/oauth/token', 'OAuth: login y renovación (app)'],
+];
+const renderEp = (list, targetId, st, stCls, countId) => {
+  $(targetId).innerHTML = list.map(([m, p, d]) =>
+    `<div class="ep"><span class="m ${m.toLowerCase()}">${m}</span><code>${p}</code><span class="u">${d}</span><span class="st ${stCls}">${st}</span></div>`).join('');
+  if (countId) $(countId).textContent = list.length;
+};
+renderEp(IMPLEMENTADOS, 'epListWeb', '✅ listo', 'done', 'nWeb');
+renderEp(PENDIENTES, 'epListPend', '⏳ pendiente', 'pend', 'nPend');
+renderEp(ENDPOINTS, 'epList', '🔵 app', 'app', 'nApp');
+
+/* ---------- loops ---------- */
+checkSession(); refresh(); refreshLogs(); refreshCambios();
+loadCuentaSaldo(true);   // cargar cuenta + saldo al abrir el panel
+loadTasa(true);          // cargar tasa del banco al abrir
+cargarComboForm();       // actividades/destinos REALES del banco para el formulario de compra
+setInterval(refresh, 2000);
+setInterval(refreshLogs, 1500);
+setInterval(refreshCambios, 3000);
+setInterval(pollPushes, 3000);
+setInterval(checkSession, 5000);
+setInterval(() => loadCuentaSaldo(false), 120000);   // reintentar saldo cada 2 min
+setInterval(() => loadTasa(false), 120000);          // refrescar tasa cada 2 min
+setInterval(() => loadMovimientos(false), 120000);   // movimientos frescos cada 2 min
+setInterval(cargarComboForm, 600000);                // refrescar combo cada 10 min
+
+// Carga los códigos REALES de actividad económica y destino de fondos del banco
+// (el payload de compra exige estos códigos, no texto libre)
+async function cargarComboForm() {
+  try {
+    // Si el estado aún no ha llegado, NO se reconstruye todavía: hacerlo perdería la
+    // selección del usuario (el combo se recrearía sin saber cuál era el valor guardado).
+    // El ciclo de refresco (refresh -> cargarComboForm) volverá a intentarlo.
+    if (!state || !state.cfg) return;
+    const r = await fetch('/api/web-combo', { method: 'POST' });
+    const d = await r.json();
+    if (!d.ok || !d.data) return;
+    const data = d.data;
+    const selDest = $('fDestino'), selAct = $('fActividad');
+    if (Array.isArray(data.codigo) && data.codigo.length) {
+      // DESTINO DE FONDOS: el valor de la opción es el CÓDIGO del banco (id), no el
+      // texto. Antes se guardaba codigoDestino ("Ahorro") como valor, así que al
+      // reconstruirse el combo se perdía la selección y AUTORREENVÍO enviaba otro
+      // destino (p. ej. "Otros" → 11 en vez del 05 configurado).
+      const elegidoAntes = selDest.value;   // lo que el usuario tiene seleccionado AHORA
+      selDest.innerHTML = '';
+      for (const c of data.codigo) {
+        const op = document.createElement('option');
+        op.value = c.id; op.textContent = c.codigoDestino;
+        selDest.appendChild(op);
+      }
+      // Conservar la selección: primero la del usuario; si no, la guardada en la config.
+      const guardado = (state && state.cfg && state.cfg.destinoFondos) || '';
+      const preferido = [elegidoAntes, guardado].find(
+        (v) => v && [...selDest.options].some((o) => o.value === v)
+      );
+      if (preferido) selDest.value = preferido;
+    }
+    if (Array.isArray(data.actividad) && data.actividad.length) {
+      // ACTIVIDAD ECONÓMICA: igual que el destino — el value es el CÓDIGO del banco
+      // (id), no el texto. Antes se guardaba el texto como valor, lo que corrompía
+      // cfg.codigoActividadEconomica (p. ej. "No aplica (...)" en vez de "22").
+      const activAntes = selAct.value;
+      selAct.innerHTML = '';
+      for (const a of data.actividad) {
+        const op = document.createElement('option');
+        op.value = a.id; op.textContent = a.actividadEconomica;
+        selAct.appendChild(op);
+      }
+      const guardadoAct = (state && state.cfg && state.cfg.codigoActividadEconomica) || '';
+      const prefAct = [activAntes, guardadoAct].find(
+        (v) => v && [...selAct.options].some((o) => o.value === v)
+      );
+      if (prefAct) selAct.value = prefAct;
+    }
+  } catch (_) {}
+}
+
+/* ============================================================
+   PESTAÑA APK — canal real de la intervención
+   ------------------------------------------------------------
+   El portal (bdvenlinea) responde SIEMPRE code=01: nunca refleja si
+   la subasta está abierta. El APK usa otra API (bdvdigital.banvenez.com)
+   que sí lo refleja. Estas funciones llaman a los endpoints /api/apk-*
+   del propio servidor: la web es autónoma, no depende de nada externo.
+   ============================================================ */
+
+/** Pinta un bloque de código con su significado. */
+function apkCodeBox(code, message, extra = '') {
+  const color = code === '1000' ? '#22a06b'
+    : code === '1003' ? '#d08020'
+    : code === 'WAF' ? '#a04040'
+    : '#808080';
+  return `<div style="display:inline-block; padding:6px 12px; border-radius:6px;
+    background:${color}22; border:1px solid ${color}; color:${color};
+    font-family:Consolas,monospace; font-weight:700; font-size:15px">code ${code ?? '—'}</div>
+    ${message ? `<div style="margin-top:6px; color:#9aa">${escapeHtml(String(message))}</div>` : ''}
+    ${extra}`;
+}
+
+async function apkPost(ruta, body = {}) {
+  const r = await fetch(ruta, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  return r.json();
+}
+
+async function apkEstado() {
+  const box = $('apkEstadoBox');
+  box.innerHTML = '<span class="hint">consultando…</span>';
+  try {
+    const d = await apkPost('/api/apk-estado');
+    const ok = d.disponible;
+    box.innerHTML = `
+      <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap">
+        ${apkCodeBox(d.code, d.message)}
+        <div style="font-weight:700; color:${ok ? '#22a06b' : '#d08020'}; font-size:15px">
+          ${ok ? '✅' : '⏳'} ${escapeHtml(d.significado || '')}
+        </div>
+      </div>
+      <div class="hint" style="margin-top:10px">
+        canal: <b>APK</b> · ${escapeHtml(d.base || '')}<br>
+        http ${d.httpStatus ?? '—'} · ${d.ms ?? '—'} ms · ${d.ts ? new Date(d.ts).toLocaleTimeString() : ''}
+        ${d.waf ? '<br><b style="color:#a04040">bloqueado por el WAF del banco</b>' : ''}
+      </div>`;
+    // Refresca el panel de compra con el estado
+    $('apkCompraBox').innerHTML = ok
+      ? '<div style="color:#22a06b; font-weight:700">✅ Hay cupo AHORA — pulsa COMPRAR</div>'
+      : '';
+  } catch (e) {
+    box.innerHTML = `<span style="color:#d04040">error: ${escapeHtml(e.message)}</span>`;
+  }
+}
+
+async function apkVer(cual, contenedor) {
+  const box = $(contenedor);
+  box.innerHTML = '<span class="hint">consultando…</span>';
+  try {
+    const d = await apkPost(`/api/apk-${cual}`);
+    box.innerHTML = apkCodeBox(d.code, d.message) +
+      `<pre style="margin-top:10px; max-height:320px; overflow:auto; font-size:11px;
+        background:#0d1117; padding:10px; border-radius:6px">${escapeHtml(JSON.stringify(d.data, null, 2))}</pre>`;
+  } catch (e) {
+    box.innerHTML = `<span style="color:#d04040">error: ${escapeHtml(e.message)}</span>`;
+  }
+}
+
+async function apkRaw() {
+  const box = $('apkRawBox');
+  let payload = {};
+  try { payload = JSON.parse($('apkRawBody').value || '{}'); } catch (_) { payload = {}; }
+  box.innerHTML = '<span class="hint">enviando…</span>';
+  try {
+    const d = await apkPost('/api/apk-raw', { url: $('apkRawUrl').value.trim(), payload });
+    box.innerHTML = apkCodeBox(d.code, d.message) +
+      `<div class="hint" style="margin-top:6px">http ${d.httpStatus ?? '—'} · ${d.ms ?? '—'} ms</div>` +
+      `<pre style="margin-top:8px; max-height:300px; overflow:auto; font-size:11px;
+        background:#0d1117; padding:10px; border-radius:6px">${escapeHtml(JSON.stringify(d.raw, null, 2))}</pre>`;
+  } catch (e) {
+    box.innerHTML = `<span style="color:#d04040">error: ${escapeHtml(e.message)}</span>`;
+  }
+}
+
+$('btnApkEstado').addEventListener('click', apkEstado);
+$('btnApkActividades').addEventListener('click', () => apkVer('actividades', 'apkEstadoBox'));
+$('btnApkReglas').addEventListener('click', () => apkVer('reglas', 'apkEstadoBox'));
+$('btnApkOficinas').addEventListener('click', () => apkVer('oficinas', 'apkEstadoBox'));
+$('btnApkRaw').addEventListener('click', apkRaw);
+</script>
+</body>
+</html>
