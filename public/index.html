@@ -1199,6 +1199,7 @@ async function checkSession() {
       logout.style.display = 'none';
       $('loginOverlay').style.display = 'grid';
       if (d.username) $('loginUser').value = d.username;
+      window._hasSavedPassword = !!d.hasSavedPassword;
       if (d.hasSavedPassword) {
         // SEGURIDAD: la clave guardada NO viaja al navegador; el servidor la usa si el campo va vacío
         $('loginPass').value = '';
@@ -1217,7 +1218,11 @@ async function checkSession() {
 async function doLogin() {
   const u = $('loginUser').value.trim(), p = $('loginPass').value;
   const msg = $('loginMsg');
-  if (!u || !p) { msg.className = 'err'; msg.textContent = 'Pon tu cédula y tu clave.'; return; }
+  // La clave puede ir vacía si ya hay una guardada en el servidor (.env): en ese caso
+  // el servidor usa la guardada. Solo se exige clave si NO hay ninguna guardada.
+  const tieneGuardada = p !== '' || (window._hasSavedPassword === true);
+  if (!u) { msg.className = 'err'; msg.textContent = 'Pon tu cédula.'; return; }
+  if (!tieneGuardada) { msg.className = 'err'; msg.textContent = 'Pon tu clave (o guárdala primero en Configuración).'; return; }
   msg.className = ''; msg.textContent = '🌐 Logueando por el portal web (2 pasos)… puede tardar unos segundos';
   const btn = $('btnLoginForm'); btn.disabled = true;
   try {
