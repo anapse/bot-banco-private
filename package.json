@@ -1,0 +1,13 @@
+{
+  "name": "bdv-bot-web",
+  "version": "1.0.0",
+  "description": "BDV Bot Web — Motor de automatización y panel de compra de divisas",
+  "type": "commonjs",
+  "main": "server.js",
+  "scripts": {
+    "dev": "node server.js",
+    "start": "node server.js",
+    "build": "echo 'No build step needed for Node.js static/API server'"
+  },
+  "dependencies": {}
+}

@@ -1,62 +1,62 @@
 
-Á)
+ï¿½)
 hImageFrameExtractionCalculatorCONTEXT:sampled_framesLAYOUT:debug_layouts"IMAGE:image_from_context
 cImageFrameToGpuBufferCalculatorsampled_framesimage_from_context"
-gpu_buffer:’ÈĞ
+gpu_buffer:ï¿½Èï¿½
 
 context1
 :ToImageCalculatorIMAGE_GPU:gpu_buffer"IMAGE:image_gpu
-·,InitializePageLayoutMutatorContextCalculatorIMAGE:sampled_framesCONTEXT:sampled_framesLAYOUT:debug_layoutsIMAGE_GPU:image_gpu"CONTEXT:image*RUNTIME_OPTIONS:runtime_options
-oPageLayoutMutationCalculatorCONTEXT:image"CONTEXT:taser_detection*rpn_text_detection_mutator:úö†€
-kPageLayoutMutationCalculatorCONTEXT:image"CONTEXT:taser_detection*joint_detector_mutator:úö†€
-‹PageLayoutMutationCalculatorCONTEXT:taser_detection"CONTEXT:taser_identification*'script_direction_identification_mutator:úö†€
-šPageLayoutMutationCalculatorCONTEXT:taser_identification"5CONTEXT:taser_identification_with_script_support_info*script_supported_mutator:úö†€
+ï¿½,InitializePageLayoutMutatorContextCalculatorIMAGE:sampled_framesCONTEXT:sampled_framesLAYOUT:debug_layoutsIMAGE_GPU:image_gpu"CONTEXT:image*RUNTIME_OPTIONS:runtime_options
+oPageLayoutMutationCalculatorCONTEXT:image"CONTEXT:taser_detection*rpn_text_detection_mutator:ï¿½ï¿½ï¿½ï¿½ï¿½
+kPageLayoutMutationCalculatorCONTEXT:image"CONTEXT:taser_detection*joint_detector_mutator:ï¿½ï¿½ï¿½ï¿½ï¿½
+ï¿½PageLayoutMutationCalculatorCONTEXT:taser_detection"CONTEXT:taser_identification*'script_direction_identification_mutator:ï¿½ï¿½ï¿½ï¿½ï¿½
+ï¿½PageLayoutMutationCalculatorCONTEXT:taser_identification"5CONTEXT:taser_identification_with_script_support_info*script_supported_mutator:ï¿½ï¿½ï¿½ï¿½ï¿½
 jScriptSupportCalculator5CONTEXT:taser_identification_with_script_support_info"supported_script_boolean
-‚GateCalculator!DISALLOW:supported_script_boolean-taser_identification_with_script_support_info"intermediate_script_id_context
+ï¿½GateCalculator!DISALLOW:supported_script_boolean-taser_identification_with_script_support_info"intermediate_script_id_context
 GateCalculatorALLOW:supported_script_boolean-taser_identification_with_script_support_info"taser_identification_supported
-ŞPageLayoutMutationCalculatorCONTEXT:taser_identificationCONTEXT:taser_detection&CONTEXT:taser_identification_supported"CONTEXT:taser_prelayout"CONTEXT:taser_recognition*taser_line_recognition_mutator:úö†€
-sPageLayoutMutationCalculatorCONTEXT:taser_recognition"CONTEXT:taser_prelayout*taser_line_selection_mutator€
-PageLayoutMutationCalculatorCONTEXT:taser_prelayout"CONTEXT:layout"CONTEXT:layout_taser*"taser_page_layout_analysis_mutator:úö†€
+ï¿½PageLayoutMutationCalculatorCONTEXT:taser_identificationCONTEXT:taser_detection&CONTEXT:taser_identification_supported"CONTEXT:taser_prelayout"CONTEXT:taser_recognition*taser_line_recognition_mutator:ï¿½ï¿½ï¿½ï¿½ï¿½
+sPageLayoutMutationCalculatorCONTEXT:taser_recognition"CONTEXT:taser_prelayout*taser_line_selection_mutatorï¿½
+ï¿½PageLayoutMutationCalculatorCONTEXT:taser_prelayout"CONTEXT:layout"CONTEXT:layout_taser*"taser_page_layout_analysis_mutator:ï¿½ï¿½ï¿½ï¿½ï¿½
 mPageLayoutMutationCalculatorCONTEXT:layout_taser"CONTEXT:layout*'page_layout_mutator_paragraph_detection
-yPageLayoutMutationCalculatorCONTEXT:taser_prelayout"CONTEXT:layout*#aksara_page_layout_analysis_mutator:úö†€
-ƒPageLayoutMutationCalculatorCONTEXT:taser_prelayout"CONTEXT:layout_aksara1*%aksara_page_layout_analysis_mutator_1:úö†€
-|PageLayoutMutationCalculatorCONTEXT:layout_aksara1"CONTEXT:layout_dp*'page_layout_mutator_paragraph_detection:úö†
+yPageLayoutMutationCalculatorCONTEXT:taser_prelayout"CONTEXT:layout*#aksara_page_layout_analysis_mutator:ï¿½ï¿½ï¿½ï¿½ï¿½
+ï¿½PageLayoutMutationCalculatorCONTEXT:taser_prelayout"CONTEXT:layout_aksara1*%aksara_page_layout_analysis_mutator_1:ï¿½ï¿½ï¿½ï¿½ï¿½
+|PageLayoutMutationCalculatorCONTEXT:layout_aksara1"CONTEXT:layout_dp*'page_layout_mutator_paragraph_detection:ï¿½ï¿½ï¿½ï¿½
 ^PageLayoutMutationCalculatorCONTEXT:layout_aksara1"CONTEXT:layout_dp*standalone_combiner
-uPageLayoutMutationCalculatorCONTEXT:layout_dp"CONTEXT:layout*%aksara_page_layout_analysis_mutator_2:úö†€
+uPageLayoutMutationCalculatorCONTEXT:layout_dp"CONTEXT:layout*%aksara_page_layout_analysis_mutator_2:ï¿½ï¿½ï¿½ï¿½ï¿½
 jPageLayoutMutationCalculatorCONTEXT:layout"CONTEXT:layout_dro*&page_layout_mutator_deep_reading_order
 TMergeCalculator
 layout_drolayoutintermediate_script_id_context"final_context
 |.PageLayoutMutatorContextToPageLayoutCalculatorCONTEXT:layout_droCONTEXT:layoutCONTEXT:final_context"sampled_layouts
 O%PageLayoutToPageLayoutProtoCalculatorsampled_layouts"sampled_layouts_proto
 FPageLayoutToTextImageCalculatorsampled_layouts"sampled_textimages2D
-GlobalResourceManagerFactoryresource_managerâÊ³„(0 :
-PageLayoutMutatorGeneratorresource_managerrpn_text_detection_mutator"CºËŒĞ=
-PhotoOcrTextDetectionMutatorrpn_text_detection_mutator"1:‰
-PageLayoutMutatorGeneratorresource_managerjoint_detector_mutator"AºËŒĞ;
+GlobalResourceManagerFactoryresource_managerï¿½Ê³ï¿½(0 :ï¿½
+PageLayoutMutatorGeneratorresource_managerrpn_text_detection_mutator"Cï¿½ËŒï¿½=
+PhotoOcrTextDetectionMutatorrpn_text_detection_mutator"1:ï¿½
+PageLayoutMutatorGeneratorresource_managerjoint_detector_mutator"Aï¿½ËŒï¿½;
 PageLayoutMutatorJointDetectorjoint_detector_mutator"1:b
-PageLayoutMutatorGeneratorresource_manager'script_direction_identification_mutator"	ºËŒĞ"1:…
-PageLayoutMutatorGeneratorresource_managerscript_supported_mutator";ºËŒĞ5
-ScriptSupportedMutatorscript_supported_mutator"1:š
-PageLayoutMutatorGeneratorresource_managertaser_line_recognition_mutator"JºËŒĞD
-MultiPassLineRecognitionMutatortaser_line_recognition_mutator"1:‹
-PageLayoutMutatorGeneratorresource_managertaser_line_selection_mutator"=ºËŒĞ7
-LineSelectionMutatortaser_line_selection_mutator"1:¤
-PageLayoutMutatorGeneratorresource_manager"taser_page_layout_analysis_mutator"PºËŒĞJ
-!PhotoOcrPageLayoutAnalysisMutator"taser_page_layout_analysis_mutator"1:¢
-PageLayoutMutatorGeneratorresource_manager'page_layout_mutator_paragraph_detection"IºËŒĞC
-#PageLayoutMutatorParagraphDetectiondeep_paragraphing_mutator"1:—
-PageLayoutMutatorGeneratorresource_manager#aksara_page_layout_analysis_mutator"BºËŒĞ<
-PageLayoutAnalysisMutatorpage_layout_analysis_mutator"1:›
-PageLayoutMutatorGeneratorresource_manager%aksara_page_layout_analysis_mutator_1"DºËŒĞ>
-PageLayoutAnalysisMutatorpage_layout_analysis_mutator_1"1:¢
-PageLayoutMutatorGeneratorresource_manager'page_layout_mutator_paragraph_detection"IºËŒĞC
-#PageLayoutMutatorParagraphDetectiondeep_paragraphing_mutator"1:„
-PageLayoutMutatorGeneratorresource_managerstandalone_combiner"?ºËŒĞ9
-"PageLayoutMutatorParagraphCombinerstandalone_combiner:›
-PageLayoutMutatorGeneratorresource_manager%aksara_page_layout_analysis_mutator_2"DºËŒĞ>
-PageLayoutAnalysisMutatorpage_layout_analysis_mutator_2"1:–
-PageLayoutMutatorGeneratorresource_manager&page_layout_mutator_deep_reading_order">ºËŒĞ8
-DeepReadingOrderMutatordeep_reading_order_mutator"1Rsampled_framesRdebug_layoutszsampled_layoutszsampled_layouts_protozsampled_textimageszsupported_script_boolean‚runtime_options‚resource_manager!param
+PageLayoutMutatorGeneratorresource_manager'script_direction_identification_mutator"	ï¿½ËŒï¿½"1:ï¿½
+PageLayoutMutatorGeneratorresource_managerscript_supported_mutator";ï¿½ËŒï¿½5
+ScriptSupportedMutatorscript_supported_mutator"1:ï¿½
+PageLayoutMutatorGeneratorresource_managertaser_line_recognition_mutator"Jï¿½ËŒï¿½D
+MultiPassLineRecognitionMutatortaser_line_recognition_mutator"1:ï¿½
+PageLayoutMutatorGeneratorresource_managertaser_line_selection_mutator"=ï¿½ËŒï¿½7
+LineSelectionMutatortaser_line_selection_mutator"1:ï¿½
+PageLayoutMutatorGeneratorresource_manager"taser_page_layout_analysis_mutator"Pï¿½ËŒï¿½J
+!PhotoOcrPageLayoutAnalysisMutator"taser_page_layout_analysis_mutator"1:ï¿½
+PageLayoutMutatorGeneratorresource_manager'page_layout_mutator_paragraph_detection"Iï¿½ËŒï¿½C
+#PageLayoutMutatorParagraphDetectiondeep_paragraphing_mutator"1:ï¿½
+PageLayoutMutatorGeneratorresource_manager#aksara_page_layout_analysis_mutator"Bï¿½ËŒï¿½<
+PageLayoutAnalysisMutatorpage_layout_analysis_mutator"1:ï¿½
+PageLayoutMutatorGeneratorresource_manager%aksara_page_layout_analysis_mutator_1"Dï¿½ËŒï¿½>
+PageLayoutAnalysisMutatorpage_layout_analysis_mutator_1"1:ï¿½
+PageLayoutMutatorGeneratorresource_manager'page_layout_mutator_paragraph_detection"Iï¿½ËŒï¿½C
+#PageLayoutMutatorParagraphDetectiondeep_paragraphing_mutator"1:ï¿½
+PageLayoutMutatorGeneratorresource_managerstandalone_combiner"?ï¿½ËŒï¿½9
+"PageLayoutMutatorParagraphCombinerstandalone_combiner:ï¿½
+PageLayoutMutatorGeneratorresource_manager%aksara_page_layout_analysis_mutator_2"Dï¿½ËŒï¿½>
+PageLayoutAnalysisMutatorpage_layout_analysis_mutator_2"1:ï¿½
+PageLayoutMutatorGeneratorresource_manager&page_layout_mutator_deep_reading_order">ï¿½ËŒï¿½8
+DeepReadingOrderMutatordeep_reading_order_mutator"1Rsampled_framesRdebug_layoutszsampled_layoutszsampled_layouts_protozsampled_textimageszsupported_script_booleanï¿½runtime_optionsï¿½resource_manager!param
 
 data_dir
 .literal:param
@@ -159,7 +159,7 @@ FPageLayoutToTextImageCalculatorsampled_layouts"sampled_textimages2D
 max_in_flight"/1[7]/16[0](2if#
 !use_break_if_language_unsupported"/1[8](2if#
 !use_break_if_language_unsupported"/1[9](3if#
-!use_break_if_language_unsupported"/1[10](“concat
+!use_break_if_language_unsupported"/1[10](ï¿½concat
 
 data_dir]
 R/taser_tflite_gocrlatin_mbv2_scriptid_aksara_layout_gcn_mobile_recognizer.binarypbliteral"/7[4]/4[0]/222323895[0]/4[0](	ZifE&&(!#

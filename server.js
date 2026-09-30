@@ -37,8 +37,8 @@ if (process.platform === 'win32' && !process.execArgv.includes('--use-system-ca'
   return; // este proceso termina; el hijo con --use-system-ca sigue
 }
 
-const PORT = 3721;
-const HOST = '0.0.0.0'; // accesible desde el VPS (http://IP_DEL_VPS:3721)
+const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
+const HOST = '0.0.0.0'; // accesible desde el entorno (http://0.0.0.0:3000)
 const ROOT = __dirname;
 const PUBLIC = path.join(ROOT, 'public');
 const CONFIG_PATH = path.join(ROOT, 'config.json');
