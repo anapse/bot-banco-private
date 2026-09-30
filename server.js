@@ -2313,14 +2313,24 @@ const server = http.createServer(async (req, res) => {
           ultimaCompra: bot.ultimaCompra || null
         }));
       } else if (p === '/api/web-combo' && req.method === 'POST') {
-        // Combo de actividad económica + destino de fondos (los CÓDIGOS que exige el payload de compra)
+        // Combo de actividad económica + destino de fondos (los CÓDIGOS que exige el payload de compra).
+        // FUENTE: portal (obtenerDataCombo). Si el portal no responde (sin sesión web), se
+        // devuelve un FALLBACK desde la configuración (cfg.destinoFondos / cfg.codigoActividadEconomica)
+        // para que el formulario siempre tenga opciones válidas y "Continuar" no se bloquee.
         try {
           const r = await webApi('/altaintervencioncambiaria/obtenerDataCombo', 'GET');
           bot.webCombo = r && r.data ? r.data : r;
           res.end(JSON.stringify({ ok: true, data: bot.webCombo }));
         } catch (e) {
-          log('error', `Combo falló: ${e.message}`);
-          res.end(JSON.stringify({ ok: false, error: e.message }));
+          // FALLBACK de configuración: códigos ya guardados, sin depender del portal.
+          const comboFallback = {
+            codigo: [{ id: cfg.destinoFondos || '11', codigoDestino: 'Destino configurado (' + (cfg.destinoFondos || '11') + ')' }],
+            actividad: [{ id: cfg.codigoActividadEconomica || '22', actividadEconomica: 'Actividad configurada (' + (cfg.codigoActividadEconomica || '22') + ')' }],
+            _fallback: true, _fuente: 'config (sin portal)'
+          };
+          bot.webCombo = comboFallback;
+          log('warn', `Combo del portal no disponible — usando fallback de config (${e.message})`);
+          res.end(JSON.stringify({ ok: true, data: comboFallback }));
         }
       } else if (p === '/api/web-renew' && req.method === 'POST') {
         // Renueva la sesión — pasa por el CANDADO ÚNICO (antes llamaba a webRenew()

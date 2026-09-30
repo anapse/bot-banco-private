@@ -815,23 +815,41 @@ $('btnTasa').onclick = () => loadTasa(true);
 
 /* ---------- compra de divisas (formulario como la app) ---------- */
 async function cargarCuentasCompra() {
+  // FALLBACK INMEDIATO desde la configuración (cuentas ya guardadas en config.json,
+  // expuestas por /api/state). NO depende del portal ni de una sesión web: así los
+  // selects nunca quedan vacíos y "Continuar" siempre puede avanzar.
+  const cuentasLocal = (state && state.cfg) ? (state.cfg.cuentaDebito ? { id: String(state.cfg.cuentaDebito).slice(-4), mascara: '…' + String(state.cfg.cuentaDebito).slice(-4), tipo: 'CUENTA (config)' } : null) : null;
+  const cuentaDivisaLocal = (state && state.cfg && state.cfg.cuentaDestino) ? { id: String(state.cfg.cuentaDestino).slice(-4), mascara: '…' + String(state.cfg.cuentaDestino).slice(-4), tipo: 'USD (config)' } : null;
+
+  if (cuentasLocal) {
+    $('fCtaDebito').innerHTML = `<option value="${escapeHtml(cuentasLocal.id)}">${escapeHtml(cuentasLocal.mascara)} · ${escapeHtml(cuentasLocal.tipo)}</option>`;
+  }
+  if (cuentaDivisaLocal) {
+    $('fCtaDestino').innerHTML = `<option value="${escapeHtml(cuentaDivisaLocal.id)}">${escapeHtml(cuentaDivisaLocal.mascara)} · ${escapeHtml(cuentaDivisaLocal.tipo)}</option>`;
+  }
+
+  // Enriquecer (si se puede) con las listas reales del banco vía portal. Si falla,
+  // se conserva el fallback de configuración ya pintado arriba.
   try {
-    // El panel sólo conoce la MÁSCARA de cada cuenta (el número real vive en el servidor)
     const rc = await fetch('/api/web-cuentas', { method: 'POST' });
     const dc = await rc.json();
     if (dc.ok && dc.cuentas && dc.cuentas.length) {
       $('fCtaDebito').innerHTML = dc.cuentas.map(c =>
         `<option value="${escapeHtml(c.id)}">${escapeHtml(c.mascara)} · ${escapeHtml(c.tipo || '')}</option>`).join('');
+      if (cuentasLocal && !dc.cuentas.some(c => String(c.id) === cuentasLocal.id)) {
+        $('fCtaDebito').insertAdjacentHTML('beforeend', `<option value="${escapeHtml(cuentasLocal.id)}">${escapeHtml(cuentasLocal.mascara)} · ${escapeHtml(cuentasLocal.tipo)}</option>`);
+      }
     }
     const r = await fetch('/api/web-cuentas-divisa', { method: 'POST' });
     const d = await r.json();
     if (d.ok && d.cuentas && d.cuentas.length) {
       $('fCtaDestino').innerHTML = d.cuentas.map(c =>
         `<option value="${escapeHtml(c.id)}">${escapeHtml(c.mascara)} · ${escapeHtml(c.tipo || 'USD')}</option>`).join('');
-    } else {
-      $('fCtaDestino').innerHTML = '<option value="">— sin cuentas USD —</option>';
+      if (cuentaDivisaLocal && !d.cuentas.some(c => String(c.id) === cuentaDivisaLocal.id)) {
+        $('fCtaDestino').insertAdjacentHTML('beforeend', `<option value="${escapeHtml(cuentaDivisaLocal.id)}">${escapeHtml(cuentaDivisaLocal.mascara)} · ${escapeHtml(cuentaDivisaLocal.tipo)}</option>`);
+      }
     }
-  } catch (e) {}
+  } catch (e) { /* conservar fallback de configuración */ }
 }
 // El campo de tasa PINTA la tasa que entregó el backend (state.tasas.operativa).
 // El panel NO elige tasa. Dos casos distintos y bien separados:
